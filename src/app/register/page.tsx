@@ -12,31 +12,65 @@ export default function RegisterPage() {
     sex: "male",
     avatarUrl: ""
   })
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setSuccess("")
+    setLoading(true)
+
+    let uploadedAvatarUrl = form.avatarUrl
+
+    if (avatarFile) {
+      const formData = new FormData()
+      formData.append("file", avatarFile)
+
+      try {
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!uploadRes.ok) {
+          setError("Помилка завантаження аватару")
+          setLoading(false)
+          return
+        }
+
+        const uploadData = await uploadRes.json()
+        uploadedAvatarUrl = uploadData.url
+      } catch (err) {
+        setError("Помилка підключення при завантаженні аватару")
+        setLoading(false)
+        return
+      }
+    }
     
+    const finalForm = { ...form, avatarUrl: uploadedAvatarUrl }
+
     const res = await fetch("../api/auth/register", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(form),
+      body: JSON.stringify(finalForm),
     })
 
     const data = await res.json()
 
     if (!res.ok) {
       setError(data.error)
+      setLoading(false)
       return
     }
 
     setSuccess("Реєстрація успішна! Тепер ви можете увійти.")
+    setLoading(false)
   }
 
   return (
@@ -92,7 +126,52 @@ export default function RegisterPage() {
             </select>
           </div>
 
-          <button type="submit" className={styles.button}>Зареєструватися</button>
+          <div className={styles.inputGroup}>
+            <label className={styles.label}>Аватар (Опціонально)</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <label 
+                style={{
+                  backgroundColor: "var(--moon-surface-light)",
+                  border: "1px dashed var(--moon-accent)",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "8px",
+                  color: "var(--moon-text)",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  textAlign: "center",
+                  flex: 1,
+                  transition: "all 0.2s"
+                }}
+              >
+                {avatarFile ? avatarFile.name : "Обрати файл..."}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                  style={{ display: "none" }}
+                />
+              </label>
+              {avatarFile && (
+                <div 
+                  onClick={() => setAvatarFile(null)}
+                  style={{
+                    color: "#ef4444",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    fontWeight: "bold",
+                    padding: "0.5rem"
+                  }}
+                  title="Видалити файл"
+                >
+                  ✕
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button type="submit" className={styles.button} disabled={loading}>
+            {loading ? "Завантаження..." : "Зареєструватися"}
+          </button>
         </form>
 
         <p className={styles.footerText}>

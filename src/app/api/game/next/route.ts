@@ -128,6 +128,18 @@ export async function POST(req: NextRequest) {
     if (winner) {
       await prisma.gameSession.update({ where: { id: sessionId }, data: { status: "finished" } })
       await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
+      
+      const resultsData = after!.players.map((p) => {
+        const isMafiaTeam = p.role === "mafia" || p.role === "don";
+        const isWin = (winner === "mafia" && isMafiaTeam) || (winner === "citizens" && !isMafiaTeam);
+        return {
+          userId: p.userId,
+          gameType: "mafia",
+          result: isWin ? "win" : "lose",
+          stats: { role: p.role },
+        };
+      });
+      await prisma.gameResult.createMany({ data: resultsData });
     }
   }
 
@@ -227,6 +239,18 @@ export async function POST(req: NextRequest) {
         if (nightWinner) {
           await prisma.gameSession.update({ where: { id: sessionId }, data: { status: "finished" } })
           await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
+
+          const resultsData = afterNight!.players.map((p) => {
+            const isMafiaTeam = p.role === "mafia" || p.role === "don";
+            const isWin = (nightWinner === "mafia" && isMafiaTeam) || (nightWinner === "citizens" && !isMafiaTeam);
+            return {
+              userId: p.userId,
+              gameType: "mafia",
+              result: isWin ? "win" : "lose",
+              stats: { role: p.role },
+            };
+          });
+          await prisma.gameResult.createMany({ data: resultsData });
         }
 
         return NextResponse.json({ success: true })
@@ -467,6 +491,18 @@ export async function POST(req: NextRequest) {
   if (winner) {
     await prisma.gameSession.update({ where: { id: sessionId }, data: { status: "finished" } })
     await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
+
+    const resultsData = updatedGame!.players.map((p) => {
+      const isMafiaTeam = p.role === "mafia" || p.role === "don";
+      const isWin = (winner === "mafia" && isMafiaTeam) || (winner === "citizens" && !isMafiaTeam);
+      return {
+        userId: p.userId,
+        gameType: "mafia",
+        result: isWin ? "win" : "lose",
+        stats: { role: p.role },
+      };
+    });
+    await prisma.gameResult.createMany({ data: resultsData });
   }
 
   return NextResponse.json({ success: true })

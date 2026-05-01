@@ -1,0 +1,183 @@
+:root {
+  --moon-bg: #0f172a;
+  --moon-surface: #1e293b;
+  --moon-surface-light: #334155;
+  --moon-accent: #38bdf8;
+  --moon-text: #f8fafc;
+  --moon-text-dim: #94a3b8;
+  --moon-border: #334155;
+}
+
+.container {
+  min-height: 100vh;
+  background-color: var(--moon-bg);
+  color: var(--moon-text);
+  padding: 2rem;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 20% 1fr 20%;
+  gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  color: var(--moon-text);
+}
+
+.card {
+  background-color: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  border-color: var(--moon-accent);
+}
+
+.lobbyCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.lobbyInfo h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  color: var(--moon-accent);
+}
+
+.lobbyInfo p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--moon-text-dim);
+}
+
+.lobbyStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badgeWaiting { background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid #22c55e; }
+.badgePlaying { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid #38bdf8; }
+.badgeFinished { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid #94a3b8; }
+
+.button {
+  background-color: var(--moon-accent);
+  color: var(--moon-bg);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  width: 100%;
+}
+
+.button:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+.buttonSecondary {
+  background-color: var(--moon-surface-light);
+  color: var(--moon-text);
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filterLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--moon-text-dim);
+  text-transform: uppercase;
+}
+
+.select, .input {
+  background-color: var(--moon-surface-light);
+  border: 1px solid var(--moon-border);
+  color: var(--moon-text);
+  padding: 0.6rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.select:focus, .input:focus {
+  border-color: var(--moon-accent);
+}
+
+.dropdownContainer {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  z-index: 50;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+.dropdownItem {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropdownItem:hover {
+  background-color: var(--moon-surface-light);
+  color: var(--moon-accent);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 3rem;
+  color: var(--moon-text-dim);
+  background: var(--moon-surface);
+  border-radius: 12px;
+  border: 1px dashed var(--moon-border);
+}

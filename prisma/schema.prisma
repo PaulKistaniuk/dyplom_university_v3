@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  username String @default("user")
+  password String
+
+  sex       String  @default("no male") // "male" | "female", потім зміню мб на enum/аналог
+  avatarUrl String? @default("") // пізніше займусь
+
+  createdAt DateTime @default(now())
+
+  gameHistory GameResult[]
+
+  balance Int @default(0)
+
+  lobbiesOwned Lobby[]
+  lobbyPlayers LobbyPlayer[]
+  gamePlayer   GamePlayer[]
+}
+
+model GameSession {
+  id      String @id @default(uuid())
+  lobbyId String
+
+  status String // waiting | night | day | voting | finished
+  phase  String // mafia | don | commissar | doctor | discussion | voting | revote_defense | night_kill_speech | voting_elim_speech | single_elim_speech
+
+  dayNumber Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  actions Json @default("{}")
+
+  players GamePlayer[]
+
+  lobby Lobby @relation(fields: [lobbyId], references: [id])
+}
+
+model GameResult {
+  id       String @id @default(uuid())
+  userId   String
+  gameType String // "mafia" | "bunker"
+
+  result String // "win" | "lose"
+  stats  Json // Поки що так, ймовірніше за все згодом буде розділення для кожної гри окремо
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model GamePlayer {
+  id String @id @default(uuid())
+
+  gameId String
+  userId String
+
+  role    String // mafia | don | commissar | doctor | citizen
+  isAlive Boolean @default(true)
+  number  Int     @default(0)
+
+  // нічні дії
+  hasVoted Boolean @default(false)
+
+  // обмеження ролей
+  checksUsed     Int  @default(0)
+  healsUsed      Int  @default(0)
+  checkedPlayers Json @default("[]")
+
+  game GameSession @relation(fields: [gameId], references: [id])
+  user User        @relation(fields: [userId], references: [id])
+}
+
+model Lobby {
+  id         String  @id @default(uuid())
+  name       String
+  gameType   String // "mafia" | "bunker", mb Lobby for Mafia, another BunkerLobby for Bunker. Debateble
+  maxPlayers Int
+  isPrivate  Boolean @default(false)
+
+  status String @default("waiting") // waiting | playing | finished
+
+  revealRoles Boolean @default(false)
+  lastWords   Boolean @default(true)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  players LobbyPlayer[]
+
+  createdAt DateTime @default(now())
+
+  gameSessions GameSession[]
+}
+
+model LobbyPlayer {
+  id String @id @default(uuid())
+
+  userId  String
+  lobbyId String
+
+  user  User  @relation(fields: [userId], references: [id])
+  lobby Lobby @relation(fields: [lobbyId], references: [id])
+
+  isReady  Boolean  @default(false)
+  joinedAt DateTime @default(now())
+}

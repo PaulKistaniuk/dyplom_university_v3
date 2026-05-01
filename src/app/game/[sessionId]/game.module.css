@@ -1,0 +1,496 @@
+:root {
+  --moon-bg: #0f172a;
+  --moon-surface: #1e293b;
+  --moon-surface-light: #334155;
+  --moon-accent: #38bdf8;
+  --moon-text: #f8fafc;
+  --moon-text-dim: #94a3b8;
+  --moon-border: #334155;
+  --alive-border: #22c55e;
+  --dead-border: #64748b;
+  --sticker-bg: #38bdf8;
+  --sticker-text: #0f172a;
+  --nomination-bg: #ffffff;
+  --nomination-text: #ef4444;
+  --role-citizen: #ef4444;
+  --role-mafia: #000000;
+  --role-commissar: #f97316;
+  --role-doctor: #3b82f6;
+}
+
+.container {
+  min-height: 100vh;
+  background-color: var(--moon-bg);
+  color: var(--moon-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+.chatMessages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chatMessages::-webkit-scrollbar-track {
+  background: var(--moon-surface);
+}
+
+.chatMessages::-webkit-scrollbar-thumb {
+  background: var(--moon-surface-light);
+  border-radius: 10px;
+}
+
+.chatMessages::-webkit-scrollbar-thumb:hover {
+  background: var(--moon-accent);
+}
+
+.infoBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--moon-surface);
+  border-bottom: 1px solid var(--moon-border);
+  gap: 1rem;
+}
+
+.sticker {
+  background-color: var(--sticker-bg);
+  color: var(--sticker-text);
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.phaseIcon {
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.phaseLabel {
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.025em;
+  flex: 1;
+}
+
+.phaseDetail {
+  font-size: 0.875rem;
+  color: var(--moon-text-dim);
+  text-align: right;
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tabsContainer {
+  display: flex;
+  padding: 0.5rem 1.5rem 0;
+  background-color: var(--moon-surface);
+  border-bottom: 1px solid var(--moon-border);
+}
+
+.tab {
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  color: var(--moon-text-dim);
+}
+
+.tab:hover {
+  color: var(--moon-text);
+}
+
+.activeTab {
+  color: var(--moon-accent);
+  border-bottom-color: var(--moon-accent);
+}
+
+.mainLayout {
+  display: flex;
+  padding: 1.5rem;
+  gap: 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.gameArea {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chatSidebar {
+  width: 320px;
+  flex-shrink: 0;
+  background-color: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-radius: 12px;
+  padding: 1rem;
+  height: calc(100vh - 280px);
+  /* Reduced height */
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 100px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+}
+
+.chatCollapsed {
+  transform: translateX(calc(100% + 1.5rem));
+  position: absolute;
+  right: 1.5rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chatToggleBtn {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-right: none;
+  color: var(--moon-accent);
+  padding: 1rem 0.5rem;
+  border-radius: 12px 0 0 12px;
+  cursor: pointer;
+  z-index: 100;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.chatToggleBtn:hover {
+  background: var(--moon-surface-light);
+  color: var(--moon-text);
+}
+
+.chatHeader {
+  font-weight: 600;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--moon-border);
+  margin-bottom: 1rem;
+}
+
+.chatMessages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 4px;
+}
+
+.chatInputWrapper {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chatInput {
+  flex: 1;
+  background: var(--moon-surface-light);
+  border: 1px solid var(--moon-border);
+  color: var(--moon-text);
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.chatInput:focus {
+  outline: none;
+  border-color: var(--moon-accent);
+}
+
+.playerCardsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+}
+
+.discussionGrid {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+
+@media (max-width: 1440px) {
+  .playerCardsGrid:not(.discussionGrid) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .playerCardsGrid:not(.discussionGrid) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.playerCard {
+  background-color: var(--moon-surface);
+  border: 2px solid var(--dead-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.playerCard:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.5);
+}
+
+.alive {
+  border-color: var(--alive-border);
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.05);
+}
+
+.dead {
+  border-color: var(--dead-border);
+  filter: grayscale(0.8) opacity(0.6);
+}
+
+.speaking {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  transform: translateY(-8px) scale(1.05);
+}
+
+.nominated {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.cardSticker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: var(--sticker-bg);
+  color: var(--sticker-text);
+  padding: 0.3rem 0.75rem;
+  border-bottom-right-radius: 12px;
+  font-weight: 800;
+  font-size: 0.75rem;
+  z-index: 2;
+}
+
+.nominationSticker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: var(--nomination-bg);
+  color: var(--nomination-text);
+  padding: 0.25rem 0.75rem;
+  border-bottom-left-radius: 12px;
+  font-weight: 900;
+  font-size: 1.1rem;
+  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 2;
+}
+
+.avatarWrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: var(--moon-surface-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  margin-top: 0.5rem;
+  border: 2px solid var(--moon-border);
+  overflow: hidden;
+}
+
+.avatarImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nickname {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.cardPlaceholders {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.placeholder {
+  min-height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--moon-text-dim);
+}
+
+.statusPlaceholder {
+  color: var(--moon-accent);
+  font-weight: 500;
+}
+
+.actionButton {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.8125rem;
+}
+
+.actionButton:hover {
+  transform: scale(1.05);
+  filter: brightness(1.2);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.killBtn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.healBtn {
+  background-color: #22c55e;
+  color: white;
+}
+
+.checkBtn {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.voteBtn {
+  background-color: #6366f1;
+  color: white;
+}
+
+.nominateBtn {
+  background-color: #f97316;
+  color: white;
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+.checkResult {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  background-color: #ffffff;
+  border: 1px solid var(--moon-border);
+  font-weight: 800;
+  text-transform: uppercase;
+  display: inline-block;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mafiaMark {
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.msg {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.msgSystem {
+  color: var(--moon-accent);
+  font-style: italic;
+}
+
+.msgUser {
+  color: var(--moon-text);
+}
+
+.msgUserSelf {
+  color: var(--moon-text);
+  background: rgba(56, 189, 248, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.investigationArea {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-radius: 12px;
+  flex: 1;
+}
+
+.investigationTitle {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--moon-accent);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.investigationPlaceholder {
+  color: var(--moon-text-dim);
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+.gameColumns {
+  display: flex;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.playersColumn {
+  flex: 1;
+  min-width: 0;
+}
+
+.investigationColumn {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.investigationColumn .investigationArea {
+  margin-top: 0;
+  height: calc(100vh - 280px);
+  overflow-y: auto;
+}

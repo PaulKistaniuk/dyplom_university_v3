@@ -4,8 +4,6 @@ import { cookies } from "next/headers"
 import jwt from "jsonwebtoken"
 import { assignRoles } from "@/game-engine/mafia/setup"
 
-const MIN_PLAYERS = 4
-
 export async function POST(req: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -35,10 +33,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Only owner can start" }, { status: 403 })
     }
 
-    // мінімалка гравців 4 для мафії, можливо зміниться
-    if (lobby.players.length < MIN_PLAYERS) {
+    // Мінімум гравців залежить від типу гри
+    const minPlayers = lobby.gameType === "whoami" ? 2 : 4
+    if (lobby.players.length < minPlayers) {
       return NextResponse.json(
-        { error: `Minimum ${MIN_PLAYERS} players required` },
+        { error: `Minimum ${minPlayers} players required` },
         { status: 400 }
       )
     }
@@ -61,27 +60,60 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // GameSession
-    const session = await prisma.gameSession.create({
-      data: {
-        lobbyId: lobbyId,
-        status: "night",
-        phase: "mafia",
-        dayNumber: 1,
-      },
-    })
+    let session: any
 
-    // Копіюємо гравців у Player(зв'язка з грою)
-    const playerIds = lobby.players.map(p => p.userId)
-    const roles = assignRoles(playerIds)
+    if (lobby.gameType === "whoami") {
+      // ===== "Хто я?" =====
+      const turnOrder = lobby.players.map(p => p.userId)
 
-    await prisma.gamePlayer.createMany({
-      data: lobby.players.map((p, index) => ({
-        userId: p.userId,
-        gameId: session.id,
-        role: roles[index],
-      })),
-    })
+      session = await prisma.gameSession.create({
+        data: {
+          lobbyId: lobbyId,
+          status: "writing",
+          phase: "submit_words",
+          dayNumber: 0,
+          actions: {
+            submittedWords: {},
+            assignments: {},
+            turnOrder: turnOrder,
+            currentTurnIndex: 0,
+            answers: {},
+            winners: [],
+            gameLog: [],
+          },
+        },
+      })
+
+      // Створюємо гравців з role: "player" (буде замінено на слово після розподілу)
+      await prisma.gamePlayer.createMany({
+        data: lobby.players.map(p => ({
+          userId: p.userId,
+          gameId: session.id,
+          role: "player",
+        })),
+      })
+    } else {
+      // ===== Мафія (існуюча логіка, не чіпаємо) =====
+      session = await prisma.gameSession.create({
+        data: {
+          lobbyId: lobbyId,
+          status: "night",
+          phase: "mafia",
+          dayNumber: 1,
+        },
+      })
+
+      const playerIds = lobby.players.map(p => p.userId)
+      const roles = assignRoles(playerIds)
+
+      await prisma.gamePlayer.createMany({
+        data: lobby.players.map((p, index) => ({
+          userId: p.userId,
+          gameId: session.id,
+          role: roles[index],
+        })),
+      })
+    }
 
     // рефреш лобі(тепер воно в грі)
     await prisma.lobby.update({
@@ -95,4 +127,4 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 400 })
   }
-}
+}

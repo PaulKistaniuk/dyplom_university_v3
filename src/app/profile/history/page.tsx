@@ -50,13 +50,14 @@ export default function GameHistoryPage() {
 
   const getGameName = (gameType: string) => {
     if (gameType === "mafia") return "Мафія";
+    if (gameType === "whoami") return "Хто я?";
     return gameType;
   };
 
   return (
     <div>
       <h1 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "1.5rem", color: "#38bdf8" }}>Історія ігор</h1>
-      
+
       {history.length === 0 ? (
         <div style={{ color: "#94a3b8", textAlign: "center", padding: "2rem" }}>
           Ви ще не зіграли жодної гри.
@@ -64,7 +65,7 @@ export default function GameHistoryPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {history.map((game) => (
-            <div 
+            <div
               key={game.id}
               style={{
                 display: "flex",
@@ -78,15 +79,22 @@ export default function GameHistoryPage() {
             >
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ fontWeight: "bold", fontSize: "1.125rem", color: "#f8fafc" }}>
-                  {getRoleName(game.stats?.role)}
+                  {game.gameType === "whoami"
+                    ? (game.stats?.assignedWord || "Гравець")
+                    : getRoleName(game.stats?.role)}
                 </span>
                 <span style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "0.25rem" }}>
                   {new Date(game.createdAt).toLocaleDateString("uk-UA")}
                 </span>
               </div>
-              
-              <div style={{ fontWeight: "bold", color: "#38bdf8", fontSize: "1.125rem" }}>
-                {getGameName(game.gameType)}
+
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: "bold", color: "#38bdf8", fontSize: "1.125rem" }}>
+                  {getGameName(game.gameType)}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                  {game.stats?.totalPlayers || "?"} гравців
+                </div>
               </div>
             </div>
           ))}

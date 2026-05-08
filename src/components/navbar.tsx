@@ -119,7 +119,14 @@ export default function Navbar() {
           {activeGame?.sessionId && (
             <button
               style={getBtnStyle("active", true)}
-              onClick={() => router.push(`/game/${activeGame.sessionId}`)}
+              onClick={() => {
+                const sid = activeGame.sessionId
+                if (activeGame.gameType === "whoami") {
+                  router.push(`/game/whoami/${sid}`)
+                } else {
+                  router.push(`/game/${sid}`)
+                }
+              }}
               onMouseEnter={() => setHoveredBtn("active")}
               onMouseLeave={() => setHoveredBtn(null)}
             >

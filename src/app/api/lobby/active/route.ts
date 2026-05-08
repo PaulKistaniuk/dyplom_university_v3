@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       lobby: lobbyPlayer.lobby,
       sessionId: session.id,
+      gameType: lobbyPlayer.lobby.gameType,
     })
   } catch {
     return NextResponse.json({ lobby: null })

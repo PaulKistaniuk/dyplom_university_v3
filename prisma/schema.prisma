@@ -83,14 +83,19 @@ model GamePlayer {
 model Lobby {
   id         String  @id @default(uuid())
   name       String
-  gameType   String // "mafia" | "bunker", mb Lobby for Mafia, another BunkerLobby for Bunker. Debateble
+  gameType   String // "mafia" | "whoami" | "bunker"
   maxPlayers Int
   isPrivate  Boolean @default(false)
 
   status String @default("waiting") // waiting | playing | finished
 
+  // Налаштування для Мафії (залишаємо для зворотної сумісності)
   revealRoles Boolean @default(false)
   lastWords   Boolean @default(true)
+
+  // Універсальні налаштування для кожної гри
+  // Для "Хто я?": { wordSource: "players"|"ai", chatMode: "chat"|"nochat", gameMode: "champion"|"loser" }
+  settings Json @default("{}")
 
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id])

@@ -30,7 +30,12 @@ export default function LobbyPage() {
         // Auto-redirect if game started
         if (data.lobby.status === "playing" && data.lobby.gameSessions?.[0]?.id && !redirecting.current) {
           redirecting.current = true
-          router.push(`/game/${data.lobby.gameSessions[0].id}`)
+          const sid = data.lobby.gameSessions[0].id
+          if (data.lobby.gameType === "whoami") {
+            router.push(`/game/whoami/${sid}`)
+          } else {
+            router.push(`/game/${sid}`)
+          }
         }
       } catch (err) {
         console.error("Failed to fetch lobby:", err)
@@ -80,8 +85,11 @@ export default function LobbyPage() {
     }
   }
 
+  // Мінімум гравців залежить від типу гри
+  const minPlayers = lobby.gameType === "whoami" ? 2 : 4
+
   const allReady =
-    lobby.players.length >= 4 && // Мінімум 4 для мафії
+    lobby.players.length >= minPlayers &&
     lobby.players.every((p: any) => p.isReady)
 
   const startGame = async () => {
@@ -226,7 +234,7 @@ export default function LobbyPage() {
             <div className={styles.filterGroup}>
               <div className={styles.filterLabel}>Гра</div>
               <div style={{ fontWeight: 600, color: "var(--moon-accent)" }}>
-                {lobby.gameType === "mafia" ? "Мафія" : lobby.gameType}
+                {lobby.gameType === "mafia" ? "Мафія" : lobby.gameType === "whoami" ? "Хто я?" : lobby.gameType}
               </div>
             </div>
 
@@ -274,18 +282,18 @@ export default function LobbyPage() {
                       leaveLobby()
                     }}
                   >
-                    {isOwner ? "Видалити лобі" : "Покинути лобі"}
+                    {isOwner ? "Видалити лобі" : "Вийти"}
                   </button>
                 )
               )}
             </div>
             
-            {!allReady && isOwner && lobby.players.length < 4 && (
+            {!allReady && isOwner && lobby.players.length < minPlayers && (
               <div style={{ fontSize: "0.75rem", color: "#f87171", textAlign: "center" }}>
-                Потрібно мінімум 4 гравці
+                Потрібно мінімум {minPlayers} гравці
               </div>
             )}
-            {!allReady && isOwner && lobby.players.length >= 4 && (
+            {!allReady && isOwner && lobby.players.length >= minPlayers && (
               <div style={{ fontSize: "0.75rem", color: "var(--moon-text-dim)", textAlign: "center" }}>
                 Очікуємо готовності всіх гравців
               </div>
@@ -295,14 +303,41 @@ export default function LobbyPage() {
           <div className={styles.card}>
             <div className={styles.filterLabel} style={{ marginBottom: "0.5rem" }}>Налаштування</div>
             <div style={{ fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Розкриття ролей:</span>
-                <span style={{ color: "var(--moon-accent)" }}>{lobby.revealRoles ? "Так" : "Ні"}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Останнє слово:</span>
-                <span style={{ color: "var(--moon-accent)" }}>{lobby.lastWords ? "Так" : "Ні"}</span>
-              </div>
+              {lobby.gameType === "mafia" ? (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Розкриття ролей:</span>
+                    <span style={{ color: "var(--moon-accent)" }}>{lobby.revealRoles ? "Так" : "Ні"}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Останнє слово:</span>
+                    <span style={{ color: "var(--moon-accent)" }}>{lobby.lastWords ? "Так" : "Ні"}</span>
+                  </div>
+                </>
+              ) : lobby.gameType === "whoami" ? (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Джерело:</span>
+                    <span style={{ color: "var(--moon-accent)" }}>
+                      {(lobby.settings as any)?.wordSource === "ai" ? "ШІ" : "Гравці"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Чат:</span>
+                    <span style={{ color: "var(--moon-accent)" }}>
+                      {(lobby.settings as any)?.chatMode === "chat" ? "Увімкнено" : "Вимкнено"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Режим:</span>
+                    <span style={{ color: "var(--moon-accent)" }}>
+                      {(lobby.settings as any)?.gameMode === "loser" ? "До лузера" : "До чемпіона"}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ color: "var(--moon-text-dim)" }}>Стандартні налаштування</div>
+              )}
             </div>
           </div>
         </div>

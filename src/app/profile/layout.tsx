@@ -32,7 +32,7 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
       });
 
       if (!uploadRes.ok) throw new Error("Upload failed");
-      
+
       const { url } = await uploadRes.json();
 
       const updateRes = await fetch("/api/profile/avatar", {
@@ -70,17 +70,17 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
   return (
     <div style={{ display: "flex", width: "100%", minHeight: "calc(100vh - 64px)", color: "#f8fafc", backgroundColor: "#0f172a" }}>
       {/* Left Block (40%) */}
-      <div style={{ 
-        width: "40%", 
-        paddingLeft: "5%", 
-        paddingRight: "5%", 
+      <div style={{
+        width: "40%",
+        paddingLeft: "5%",
+        paddingRight: "5%",
         paddingTop: "2rem",
-        borderRight: "1px solid #334155" 
+        borderRight: "1px solid #334155"
       }}>
-        
+
         {/* User Info Block */}
         <div style={{ display: "flex", alignItems: "center", marginBottom: "2rem" }}>
-          <div 
+          <div
             style={{
               position: "relative",
               width: "80px",
@@ -99,16 +99,16 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
             onMouseLeave={() => setIsHovering(false)}
             onClick={handleAvatarClick}
           >
-            <img 
-              src={user.avatarUrl || "/default_user.png"} 
-              alt="Avatar" 
-              style={{ 
-                width: "100%", 
-                height: "100%", 
+            <img
+              src={user.avatarUrl || "/default_user.png"}
+              alt="Avatar"
+              style={{
+                width: "100%",
+                height: "100%",
                 objectFit: "cover",
                 transition: "all 0.2s",
                 opacity: (isHovering || uploading) ? 0.3 : 1
-              }} 
+              }}
             />
             {(isHovering || uploading) && (
               <div style={{
@@ -130,8 +130,8 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
                 {uploading ? "..." : "Змінити"}
               </div>
             )}
-            <input 
-              type="file" 
+            <input
+              type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               accept="image/*"
@@ -149,8 +149,8 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
           {links.map((link) => {
             const isActive = pathname === link.href;
             return (
-              <Link 
-                key={link.href} 
+              <Link
+                key={link.href}
                 href={link.href}
                 style={{
                   padding: "0.75rem 1rem",
@@ -171,11 +171,11 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
       </div>
 
       {/* Right Block (60%) */}
-      <div style={{ 
-        width: "60%", 
-        paddingRight: "10%", 
+      <div style={{
+        width: "60%",
+        paddingRight: "10%",
         paddingLeft: "5%",
-        paddingTop: "2rem" 
+        paddingTop: "2rem"
       }}>
         {children}
       </div>

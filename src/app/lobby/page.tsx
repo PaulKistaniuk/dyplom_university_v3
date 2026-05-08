@@ -73,11 +73,14 @@ export default function LobbyListPage() {
                 <div className={styles.dropdownItem} onClick={() => handleCreateLobby("mafia")}>
                   Мафія
                 </div>
-                <div className={styles.dropdownItem} style={{ opacity: 0.5, cursor: "not-allowed" }}>
-                  Своя Гра(В розробці)
+                <div className={styles.dropdownItem} onClick={() => router.push("/lobby/create-whoami")}>
+                  Хто я?
                 </div>
                 <div className={styles.dropdownItem} style={{ opacity: 0.5, cursor: "not-allowed" }}>
-                  Бункер(В розробці)
+                  Бункер (В розробці)
+                </div>
+                <div className={styles.dropdownItem} style={{ opacity: 0.5, cursor: "not-allowed" }}>
+                  Своя Гра(В розробці)
                 </div>
               </div>
             )}
@@ -101,7 +104,7 @@ export default function LobbyListPage() {
               >
                 <div className={styles.lobbyInfo}>
                   <h3>{lobby.name || `Лобі #${lobby.id.slice(0, 4)}`}</h3>
-                  <p>Гра: {lobby.gameType === "mafia" ? "Мафія" : lobby.gameType}</p>
+                  <p>Гра: {lobby.gameType === "mafia" ? "Мафія" : lobby.gameType === "whoami" ? "Хто я?" : lobby.gameType}</p>
                 </div>
                 <div className={styles.lobbyStatus}>
                   <div className={styles.badge + " " + (
@@ -134,6 +137,7 @@ export default function LobbyListPage() {
                 >
                   <option value="all">Всі ігри</option>
                   <option value="mafia">Мафія</option>
+                  <option value="whoami">Хто я?</option>
                 </select>
               </div>
 

@@ -15,14 +15,16 @@ export async function POST(req: NextRequest) {
     const payload: any = jwt.verify(token, process.env.JWT_SECRET!)
 
     const body = await req.json()
-    const { name, gameType, maxPlayers, isPrivate, revealRoles, lastWords } = body
+    const { name, gameType, maxPlayers, isPrivate, revealRoles, lastWords, settings } = body
 
     if (!name || !gameType || !maxPlayers) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 })
     }
 
-    if (maxPlayers < 4) {
-      return NextResponse.json({ error: "Min 4 players" }, { status: 400 })
+    // Мінімум гравців залежить від типу гри
+    const minPlayers = gameType === "whoami" ? 2 : 4
+    if (maxPlayers < minPlayers) {
+      return NextResponse.json({ error: `Min ${minPlayers} players for this game` }, { status: 400 })
     }
 
     const lobby = await prisma.lobby.create({
@@ -33,6 +35,7 @@ export async function POST(req: NextRequest) {
         isPrivate: isPrivate ?? false,
         revealRoles: revealRoles ?? false,
         lastWords: lastWords ?? true,
+        settings: settings ?? {},
         ownerId: payload.userId,
 
         players: {

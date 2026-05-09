@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
 
     const game = await prisma.gameSession.findUnique({
       where: { id: sessionId },
-      include: { players: true },
+      include: { 
+        players: true,
+        lobby: true 
+      },
     })
 
     if (!game) {
@@ -64,53 +67,97 @@ export async function POST(req: NextRequest) {
       timestamp: Date.now(),
     })
 
+    const lobbySettings = (game.lobby.settings as any) || {}
+    const gameMode = lobbySettings.gameMode || "champion"
+    const winners = actions.winners || []
+
     if (isCorrect) {
-      // Вгадав! Режим "На чемпіона" — гра завершується
-      const winners = actions.winners || []
-      winners.push(userId)
+      // Вгадав!
       myAssignment.guessed = true
+      myAssignment.rank = winners.length + 1
+      winners.push(userId)
 
-      await prisma.gameSession.update({
-        where: { id: sessionId },
-        data: {
-          status: "finished",
-          phase: "finished",
-          actions: {
-            ...actions,
-            assignments,
-            winners,
-            gameLog,
-          },
-        },
-      })
-
-      // Оновити лобі
-      await prisma.lobby.update({
-        where: { id: game.lobbyId },
-        data: { status: "finished" },
-      })
-
-      // Записати GameResult для всіх гравців
-      const resultsData = game.players.map(p => {
-        const isWinner = p.userId === userId
-        const playerAssignment = assignments[p.userId]
-        return {
-          userId: p.userId,
-          gameType: "whoami",
-          result: isWinner ? "win" : "lose",
-          stats: {
-            assignedWord: playerAssignment?.word || "unknown",
-            totalPlayers: game.players.length,
-          },
+      // Чи закінчуємо гру?
+      let shouldFinish = false
+      if (gameMode === "champion") {
+        shouldFinish = true
+      } else {
+        // Режим лузера: граємо поки не залишиться один
+        const activePlayersCount = game.players.length - winners.length
+        if (activePlayersCount <= 1) {
+          shouldFinish = true
         }
-      })
+      }
 
-      await prisma.gameResult.createMany({ data: resultsData })
+      if (shouldFinish) {
+        await prisma.gameSession.update({
+          where: { id: sessionId },
+          data: {
+            status: "finished",
+            phase: "finished",
+            actions: {
+              ...actions,
+              assignments,
+              winners,
+              gameLog,
+            },
+          },
+        })
 
-      return NextResponse.json({ success: true, correct: true })
+        await prisma.lobby.update({
+          where: { id: game.lobbyId },
+          data: { status: "finished" },
+        })
+
+        // Записати GameResult
+        const resultsData = game.players.map(p => {
+          const rank = assignments[p.userId]?.rank || 0
+          const isWinner = winners.includes(p.userId)
+          return {
+            userId: p.userId,
+            gameType: "whoami",
+            result: isWinner ? "win" : "lose",
+            stats: {
+              assignedWord: assignments[p.userId]?.word || "unknown",
+              totalPlayers: game.players.length,
+              rank: rank,
+            },
+          }
+        })
+
+        await prisma.gameResult.createMany({ data: resultsData })
+
+        return NextResponse.json({ success: true, correct: true, finished: true })
+      } else {
+        // Гра триває, перехід ходу до наступного активного гравця
+        let nextTurnIndex = currentTurnIndex
+        do {
+          nextTurnIndex = (nextTurnIndex + 1) % turnOrder.length
+        } while (assignments[turnOrder[nextTurnIndex]]?.guessed)
+
+        await prisma.gameSession.update({
+          where: { id: sessionId },
+          data: {
+            phase: "asking",
+            actions: {
+              ...actions,
+              assignments,
+              winners,
+              currentTurnIndex: nextTurnIndex,
+              answers: {},
+              gameLog,
+            },
+          },
+        })
+
+        return NextResponse.json({ success: true, correct: true, finished: false })
+      }
     } else {
-      // Не вгадав — хід переходить до наступного гравця
-      const nextTurnIndex = (currentTurnIndex + 1) % turnOrder.length
+      // Не вгадав — хід переходить до наступного активного гравця
+      let nextTurnIndex = currentTurnIndex
+      do {
+        nextTurnIndex = (nextTurnIndex + 1) % turnOrder.length
+      } while (assignments[turnOrder[nextTurnIndex]]?.guessed)
 
       await prisma.gameSession.update({
         where: { id: sessionId },
@@ -131,3 +178,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
+

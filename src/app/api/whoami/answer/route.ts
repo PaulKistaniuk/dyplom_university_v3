@@ -66,13 +66,22 @@ export async function POST(req: NextRequest) {
     // Перевіряємо чи всі (крім того хто задає) відповіли
     const otherPlayers = game.players.filter(p => p.userId !== currentTurnUserId)
     const allAnswered = otherPlayers.every(p => answers[p.userId])
+    actions.answers = answers
+
+    // Snapshot Logging: додаємо поточні відповіді до останнього питання в логу
+    const gameLog = actions.gameLog || []
+    const lastLogIndex = gameLog.length - 1
+    if (lastLogIndex >= 0 && gameLog[lastLogIndex].type === "question") {
+      gameLog[lastLogIndex].answersSnapshot = { ...answers }
+    }
 
     if (allAnswered) {
-      // Всі відповіли — переходимо до наступного ходу
-      const nextTurnIndex = (currentTurnIndex + 1) % turnOrder.length
-
-      // Пропускаємо гравців, які вже вгадали (якщо режим "На лузера" буде додано пізніше)
-      // Зараз режим "На чемпіона" — гра закінчується після першого вгадування
+      // Всі відповіли — переходимо до наступного активного гравця
+      const assignments = actions.assignments || {}
+      let nextTurnIndex = currentTurnIndex
+      do {
+        nextTurnIndex = (nextTurnIndex + 1) % turnOrder.length
+      } while (assignments[turnOrder[nextTurnIndex]]?.guessed)
 
       await prisma.gameSession.update({
         where: { id: sessionId },
@@ -82,6 +91,7 @@ export async function POST(req: NextRequest) {
             ...actions,
             answers: {},
             currentTurnIndex: nextTurnIndex,
+            gameLog,
           },
         },
       })
@@ -94,7 +104,7 @@ export async function POST(req: NextRequest) {
         data: {
           actions: {
             ...actions,
-            answers,
+            gameLog,
           },
         },
       })

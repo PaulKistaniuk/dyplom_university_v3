@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     try {
       const payload: any = jwt.verify(token, process.env.JWT_SECRET!)
       currentUserId = payload.userId
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const game = await prisma.gameSession.findUnique({
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
           user: true,
         },
       },
+      lobby: true,
     },
   })
 
@@ -36,17 +37,25 @@ export async function GET(req: NextRequest) {
   }
 
   const actions = (game.actions as any) || {}
+  const assignments = actions.assignments || {}
+  const answers = actions.answers || {}
 
   // Формуємо список гравців, приховуючи своє слово
   const players = game.players.map(p => {
-    const assignment = actions.assignments?.[p.userId]
+    const assignment = assignments[p.userId]
+    const isMe = p.userId === currentUserId
+    const isFinished = game.status === "finished"
+    const hasGuessed = assignment?.guessed || false
+
     return {
       userId: p.userId,
-      // Показуємо слово всім, КРІМ самого гравця (якщо гра не завершена)
-      word: game.status === "finished" || p.userId !== currentUserId
-        ? (assignment?.word || null)
-        : null,
-      guessed: assignment?.guessed || false,
+      // Показуємо слово всім, КРІМ самого гравця (якщо він ще не вгадав і гра не завершена)
+      word: (isMe && !isFinished && !hasGuessed)
+        ? null
+        : (assignment?.word || null),
+      guessed: hasGuessed,
+      rank: assignment?.rank || 0,
+      currentAnswer: answers[p.userId] || null,
       user: {
         username: p.user.username,
         avatarUrl: p.user.avatarUrl,
@@ -58,14 +67,22 @@ export async function GET(req: NextRequest) {
   const submittedWords = actions.submittedWords || {}
   const submittedUserIds = Object.keys(submittedWords)
 
+  const settings = (game.lobby?.settings as any) || {}
+  
+  // Якщо гравець не знайдений у лобі, або лобі не підвантажилось — лог для дебагу
+  if (!game.lobby) {
+    console.error(`[WhoAmI State] Lobby not found for session ${sessionId}`)
+  }
+
   return NextResponse.json({
     status: game.status,
     phase: game.phase,
+    settings, // Налаштування гри
     players,
     turnOrder: actions.turnOrder || [],
     currentTurnIndex: actions.currentTurnIndex || 0,
     currentTurnUserId: actions.turnOrder?.[actions.currentTurnIndex] || null,
-    answers: actions.answers || {},
+    answers: answers,
     winners: actions.winners || [],
     gameLog: actions.gameLog || [],
     submittedUserIds,

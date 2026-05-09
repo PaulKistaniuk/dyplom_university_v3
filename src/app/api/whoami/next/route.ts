@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
     const payload: any = jwt.verify(token, process.env.JWT_SECRET!)
     const userId = payload.userId
 
-    const { sessionId, action } = await req.json()
-    // action: "ask" — гравець задає питання усно
+    const { sessionId, action, text } = await req.json()
+    // action: "ask" — гравець задає питання (усно або в чат)
 
     if (!sessionId) {
       return NextResponse.json({ error: "Missing sessionId" }, { status: 400 })
@@ -24,7 +24,10 @@ export async function POST(req: NextRequest) {
 
     const game = await prisma.gameSession.findUnique({
       where: { id: sessionId },
-      include: { players: true },
+      include: { 
+        players: true,
+        lobby: true
+      },
     })
 
     if (!game) {
@@ -46,12 +49,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "ask") {
-      // Гравець задає питання усно — переключаємо в фазу відповідей
+      const chatMode = (game.lobby.settings as any)?.chatMode || "nochat"
+      
+      // Якщо режим чату, текст обов'язковий
+      if (chatMode === "chat" && (!text || !text.trim())) {
+        return NextResponse.json({ error: "Будь ласка, введіть ваше питання" }, { status: 400 })
+      }
+
       const gameLog = actions.gameLog || []
+      
+      // Додамо запис про питання
       gameLog.push({
         playerId: userId,
         type: "question",
-        text: null, // режим "Без чату" — питання задається усно
+        text: text?.trim() || null, 
         timestamp: Date.now(),
       })
 
@@ -61,7 +72,7 @@ export async function POST(req: NextRequest) {
           phase: "answering",
           actions: {
             ...actions,
-            answers: {}, // Очистити відповіді для нового питання
+            answers: {}, 
             gameLog,
           },
         },

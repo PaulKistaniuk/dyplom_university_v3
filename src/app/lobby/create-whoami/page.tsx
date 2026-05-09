@@ -7,6 +7,9 @@ import styles from "../lobby.module.css"
 export default function CreateWhoAmILobbyPage() {
   const [name, setName] = useState("")
   const [maxPlayers, setMaxPlayers] = useState(4)
+  const [wordSource, setWordSource] = useState("players")
+  const [chatMode, setChatMode] = useState("nochat")
+  const [gameMode, setGameMode] = useState("champion")
   const [isLoading, setIsLoading] = useState(false)
 
   const router = useRouter()
@@ -31,9 +34,9 @@ export default function CreateWhoAmILobbyPage() {
           maxPlayers,
           isPrivate: false,
           settings: {
-            wordSource: "players",
-            chatMode: "nochat",
-            gameMode: "champion",
+            wordSource,
+            chatMode,
+            gameMode,
           },
         }),
       })
@@ -83,6 +86,52 @@ export default function CreateWhoAmILobbyPage() {
               />
             </div>
 
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div className={styles.filterGroup}>
+                <label className={styles.filterLabel}>
+                  Джерело слів
+                  <span 
+                    title="В розробці" 
+                    style={{ marginLeft: "6px", cursor: "help", color: "var(--moon-accent)", fontSize: "0.8rem" }}
+                  >
+                    ⓘ
+                  </span>
+                </label>
+                <select 
+                  className={styles.select}
+                  value={wordSource}
+                  onChange={e => setWordSource(e.target.value)}
+                >
+                  <option value="players">Гравці</option>
+                  <option value="ai" disabled>ШІ (Скоро)</option>
+                </select>
+              </div>
+
+              <div className={styles.filterGroup}>
+                <label className={styles.filterLabel}>Режим чату</label>
+                <select 
+                  className={styles.select}
+                  value={chatMode}
+                  onChange={e => setChatMode(e.target.value)}
+                >
+                  <option value="nochat">Усно</option>
+                  <option value="chat">Чат</option>
+                </select>
+              </div>
+
+              <div className={styles.filterGroup}>
+                <label className={styles.filterLabel}>Режим гри</label>
+                <select 
+                  className={styles.select}
+                  value={gameMode}
+                  onChange={e => setGameMode(e.target.value)}
+                >
+                  <option value="champion">До чемпіона</option>
+                  <option value="loser">До лузера</option>
+                </select>
+              </div>
+            </div>
+
             <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
               <button
                 className={styles.button + " " + styles.buttonSecondary}
@@ -104,9 +153,14 @@ export default function CreateWhoAmILobbyPage() {
         </div>
 
         <div style={{ marginTop: "2rem", color: "var(--moon-text-dim)", fontSize: "0.85rem", textAlign: "center" }}>
-          <p>Ви створюєте лобі для гри <b>Хто я?</b>. Кожний гравець загадає слово, які будуть випадковим чином розподілені між учасниками.</p>
+          <p>
+            {gameMode === "champion" 
+              ? "Гра закінчиться, коли перший гравець вгадає своє слово." 
+              : "Гра триватиме, поки не залишиться лише один гравець, який не вгадав."}
+          </p>
         </div>
       </div>
     </div>
   )
 }
+

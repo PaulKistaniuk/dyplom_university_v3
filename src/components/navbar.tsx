@@ -177,7 +177,7 @@ export default function Navbar() {
                   overflow: "hidden"
                 }}>
                   <div style={dropdownItemStyle} onClick={() => router.push("/profile")} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#334155"} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}>Профіль</div>
-                  <div style={dropdownItemStyle} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#334155"} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}>Статистика</div>
+                  <div style={dropdownItemStyle} onClick={() => router.push("/stats")} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#334155"} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}>Статистика</div>
                   <div
                     style={{ ...dropdownItemStyle, borderBottom: "none", color: "#94a3b8" }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#334155"}

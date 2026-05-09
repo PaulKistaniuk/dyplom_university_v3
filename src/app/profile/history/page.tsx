@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface GameHistory {
   id: string;
@@ -11,6 +12,7 @@ interface GameHistory {
 }
 
 export default function GameHistoryPage() {
+  const router = useRouter();
   const [history, setHistory] = useState<GameHistory[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,6 +69,7 @@ export default function GameHistoryPage() {
           {history.map((game) => (
             <div
               key={game.id}
+              onClick={() => router.push(`/stats?gameId=${game.id}`)}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -75,6 +78,7 @@ export default function GameHistoryPage() {
                 backgroundColor: "#1e293b",
                 borderRadius: "8px",
                 border: `2px solid ${getBorderColor(game.result)}`,
+                cursor: "pointer",
               }}
             >
               <div style={{ display: "flex", flexDirection: "column" }}>

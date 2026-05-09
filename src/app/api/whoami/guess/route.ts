@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
     const game = await prisma.gameSession.findUnique({
       where: { id: sessionId },
       include: { 
-        players: true,
+        players: {
+          include: {
+            user: true
+          }
+        },
         lobby: true 
       },
     })
@@ -109,10 +113,17 @@ export async function POST(req: NextRequest) {
           data: { status: "finished" },
         })
 
-        // Записати GameResult
+        // Створюємо мапу гравців для історії
+        const playerMap: Record<string, string> = {}
+        game.players.forEach(p => {
+          playerMap[p.userId] = p.user.username
+        })
+
+        // Записати GameResult для всіх гравців
         const resultsData = game.players.map(p => {
           const rank = assignments[p.userId]?.rank || 0
           const isWinner = winners.includes(p.userId)
+          
           return {
             userId: p.userId,
             gameType: "whoami",
@@ -121,6 +132,12 @@ export async function POST(req: NextRequest) {
               assignedWord: assignments[p.userId]?.word || "unknown",
               totalPlayers: game.players.length,
               rank: rank,
+              // Повний зліпок гри для історії
+              fullLog: gameLog,
+              allAssignments: assignments,
+              winners: winners,
+              settings: lobbySettings,
+              playerMap // Додаємо мапу імен
             },
           }
         })

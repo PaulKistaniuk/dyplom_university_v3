@@ -109,7 +109,11 @@ export default function LobbyPage() {
       return
     }
 
-    router.push(`/game/${data.sessionId}`)
+    if (lobby.gameType === "whoami") {
+      router.push(`/game/whoami/${data.sessionId}`)
+    } else {
+      router.push(`/game/${data.sessionId}`)
+    }
   }
 
   const isInLobby = lobby.players.some(

@@ -85,7 +85,7 @@ export default function WhoAmIGamePage() {
 
   const handleAskQuestion = async () => {
     const isChat = game.settings?.chatMode === "chat"
-    
+
     if (isChat && !questionText.trim()) {
       alert("Будь ласка, введіть текст питання")
       return
@@ -95,8 +95,8 @@ export default function WhoAmIGamePage() {
       const res = await fetch("/api/whoami/next", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          sessionId, 
+        body: JSON.stringify({
+          sessionId,
           action: "ask",
           text: isChat ? questionText.trim() : null
         }),
@@ -228,7 +228,7 @@ export default function WhoAmIGamePage() {
     <div style={styles.layout}>
       {/* ЛІВА ЧАСТИНА (60% ширини) */}
       <div style={styles.leftColumn}>
-        
+
         {/* ВЕРХНЯ ЧАСТИНА: ВЕБ-КАМЕРИ / ГРАВЦІ (50% висоти) */}
         <div style={styles.webcamArea}>
           <div style={styles.playersGrid}>
@@ -241,7 +241,7 @@ export default function WhoAmIGamePage() {
 
               const getRankStyles = (r: number, mode: string) => {
                 if (mode === "champion") {
-                   return { color: "#fbbf24", label: "🏆 Переможець!" }
+                  return { color: "#fbbf24", label: "🏆 Переможець!" }
                 }
                 if (r === 1) return { color: "#fbbf24", label: "🥇 1-ше місце" }
                 if (r === 2) return { color: "#cbd5e1", label: "🥈 2-ге місце" }
@@ -298,7 +298,7 @@ export default function WhoAmIGamePage() {
                   <div style={styles.playerName}>
                     {p.user.username}{isMe && " (Ви)"}
                   </div>
-                  
+
                   {isWinner && (
                     <div style={{ color: rankInfo?.color, fontSize: "0.75rem", fontWeight: "bold" }}>
                       {rankInfo?.label}
@@ -397,10 +397,10 @@ export default function WhoAmIGamePage() {
                       </div>
                     ) : (
                       <div style={{ textAlign: "center" }}>
-                         <h3 style={{ color: "#f8fafc", marginBottom: "1rem" }}>
-                           {lastQuestion?.text ? `❓ ${lastQuestion.text}` : "Вам задали питання!"}
-                         </h3>
-                         <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+                        <h3 style={{ color: "#f8fafc", marginBottom: "1rem" }}>
+                          {lastQuestion?.text ? `❓ ${lastQuestion.text}` : "Вам задали питання!"}
+                        </h3>
+                        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
                           <button style={{ ...styles.button, backgroundColor: "#22c55e", color: "#0f172a" }} onClick={() => handleAnswer("yes")}>Так</button>
                           <button style={{ ...styles.button, backgroundColor: "#ef4444", color: "#f8fafc" }} onClick={() => handleAnswer("no")}>Ні</button>
                           <button style={{ ...styles.button, backgroundColor: "#eab308", color: "#0f172a" }} onClick={() => handleAnswer("maybe")}>Вагаюсь</button>
@@ -415,11 +415,11 @@ export default function WhoAmIGamePage() {
                 )}
               </div>
             )}
-            
+
             {game.status === "finished" && (
               <div style={{ textAlign: "center", padding: "1rem" }}>
                 <p style={{ color: "#fbbf24", fontWeight: "bold" }}>🏆 Гру завершено! Перегляньте результати.</p>
-                <button 
+                <button
                   style={{ ...styles.button, marginTop: "1rem", backgroundColor: "#334155", color: "#f8fafc" }}
                   onClick={() => window.location.href = "/lobby"}
                 >
@@ -437,7 +437,7 @@ export default function WhoAmIGamePage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
             <h3 style={{ color: "#38bdf8", margin: 0, fontSize: "1.1rem" }}>Історія гри</h3>
             <div style={{ display: "flex", gap: "4px", backgroundColor: "#0f172a", padding: "2px", borderRadius: "6px" }}>
-              <button 
+              <button
                 onClick={() => setLogFilter("all")}
                 style={{
                   ...styles.filterBtn,
@@ -445,7 +445,7 @@ export default function WhoAmIGamePage() {
                   color: logFilter === "all" ? "#f8fafc" : "#64748b"
                 }}
               >Всі</button>
-              <button 
+              <button
                 onClick={() => setLogFilter("mine")}
                 style={{
                   ...styles.filterBtn,
@@ -457,15 +457,15 @@ export default function WhoAmIGamePage() {
           </div>
 
           <div style={styles.logList}>
-             {game.gameLog?.length > 0 ? (
-               game.gameLog.slice().reverse()
+            {game.gameLog?.length > 0 ? (
+              game.gameLog.slice().reverse()
                 .filter((l: any) => logFilter === "all" || l.playerId === user?.id)
                 .map((log: any, idx: number) => {
-                 const player = game.players?.find((p: any) => p.userId === log.playerId)
-                 const answers = log.answersSnapshot || {}
-                 
-                 return (
-                   <div key={idx} style={styles.logEntry}>
+                  const player = game.players?.find((p: any) => p.userId === log.playerId)
+                  const answers = log.answersSnapshot || {}
+
+                  return (
+                    <div key={idx} style={styles.logEntry}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontWeight: "bold", color: "#38bdf8", fontSize: "0.85rem" }}>
                           {player?.user.username || "Гравець"}
@@ -486,14 +486,14 @@ export default function WhoAmIGamePage() {
                             {/* Візуалізація відповідей крапками */}
                             <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                               {game.players?.filter((p: any) => p.userId !== log.playerId).map((p: any) => (
-                                <div 
-                                  key={p.userId} 
+                                <div
+                                  key={p.userId}
                                   title={`${p.user.username}: ${answers[p.userId] === 'yes' ? 'Так' : answers[p.userId] === 'no' ? 'Ні' : '?'}`}
                                   style={{
                                     width: "8px",
                                     height: "8px",
                                     borderRadius: "50%",
-                                    backgroundColor: answers[p.userId] === "yes" ? "#22c55e" : answers[p.userId] === "no" ? "#ef4444" : "#475569"
+                                    backgroundColor: answers[p.userId] === "yes" ? "#22c55e" : answers[p.userId] === "no" ? "#ef4444" : answers[p.userId] === "maybe" ? "#eab308" : "#475569"
                                   }}
                                 />
                               ))}
@@ -508,14 +508,14 @@ export default function WhoAmIGamePage() {
                           </div>
                         ) : null}
                       </div>
-                   </div>
-                 )
-               })
-             ) : (
-               <p style={{ color: "#475569", fontSize: "0.85rem", textAlign: "center", marginTop: "2rem" }}>
-                 Тут з'являтимуться події гри...
-               </p>
-             )}
+                    </div>
+                  )
+                })
+            ) : (
+              <p style={{ color: "#475569", fontSize: "0.85rem", textAlign: "center", marginTop: "2rem" }}>
+                Тут з'являтимуться події гри...
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -527,7 +527,8 @@ export default function WhoAmIGamePage() {
 const styles: Record<string, React.CSSProperties> = {
   layout: {
     display: "flex",
-    height: "100vh",
+    height: "90vh",
+    maxHeight: "100vh",
     backgroundColor: "#0f172a",
     color: "#f8fafc",
     fontFamily: "'Inter', system-ui, sans-serif",
@@ -538,6 +539,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     borderRight: "1px solid #334155",
+    height: "100%",
   },
   rightColumn: {
     flex: "0 0 40%",
@@ -545,6 +547,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "1.5rem",
     display: "flex",
     flexDirection: "column",
+    height: "100%",
+    overflow: "hidden",
   },
   webcamArea: {
     flex: "0 0 55%",
@@ -554,11 +558,12 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "rgba(30, 41, 59, 0.3)",
   },
   statusArea: {
-    flex: "0 0 45%",
+    flex: "1",
     padding: "2rem",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    overflowY: "auto",
   },
   playersGrid: {
     display: "grid",

@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation"
 import styles from "../lobby.module.css"
 
 export default function LobbyPage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string
   const { user } = useAuth()
   const [lobby, setLobby] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)

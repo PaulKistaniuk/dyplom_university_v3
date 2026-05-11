@@ -5,7 +5,8 @@ import { useParams } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
 
 export default function WhoAmIGamePage() {
-  const { sessionId } = useParams()
+  const params = useParams()
+  const sessionId = params?.sessionId as string
   const { user } = useAuth()
   const [game, setGame] = useState<any>(null)
   const [word, setWord] = useState("")

@@ -21,7 +21,7 @@ export default function StatsPage() {
   const [filterMode, setFilterMode] = useState("all")
   const [filterRole, setFilterRole] = useState("all")
 
-  const selectedId = searchParams.get("gameId")
+  const selectedId = searchParams?.get("gameId")
 
   useEffect(() => {
     fetchHistory()

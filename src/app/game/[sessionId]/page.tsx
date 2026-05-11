@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import styles from "./game.module.css"
+import { GameChat } from "@/shared/components/GameChat/GameChat"
 
 interface ChatMessage {
   id: string
@@ -12,7 +13,7 @@ interface ChatMessage {
 
 export default function GamePage() {
   const params = useParams()
-  const sessionId = params.sessionId as string
+  const sessionId = params?.sessionId as string
   const [state, setState] = useState<any>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
@@ -20,10 +21,8 @@ export default function GamePage() {
   const [activeTab, setActiveTab] = useState("game")
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState("")
   const [isChatCollapsed, setIsChatCollapsed] = useState(false)
   const prevStateRef = useRef<any>(null)
-  const chatEndRef = useRef<HTMLDivElement>(null)
 
   const me = state?.players?.find((p: any) => p.userId === userId)
   const alivePlayers = state?.players?.filter((p: any) => p.isAlive) || []
@@ -32,7 +31,7 @@ export default function GamePage() {
     mafia: "мафія обирає жертву",
     don: "дон шукає комісара",
     commissar: "комісар шукає мафію",
-    doctor: "лікар вирішує кого рятувати",
+    doctor: "лікар рятує",
     discussion: "дискусія",
     nomination_defense: "виправдання",
     voting: "голосування",
@@ -51,25 +50,22 @@ export default function GamePage() {
     activeSpeaker = state.players?.find((p: any) => p.userId === (state.revoteCandidates || [])[state.nominationSpeakerIndex || 0])
   }
 
-  // Chat Logging Logic
+  // Chat Logging Logic (System Logs)
   useEffect(() => {
     if (!state) return
     const prev = prevStateRef.current
     const newLogs: string[] = []
 
-    // Phase change
     if (!prev || prev.phase !== state.phase || prev.status !== state.status) {
       const statusText = state.status === "night" ? `Ніч ${state.dayNumber}` : `День ${state.dayNumber}`
       const phaseText = phaseLabels[state.phase] || state.phase
       newLogs.push(`--- ${statusText}: ${phaseText} ---`)
     }
 
-    // New Speaker
     if (activeSpeaker && (!prev || prev.activeSpeakerId !== activeSpeaker.userId)) {
       newLogs.push(`Слово має гравець №${state.players.findIndex((p: any) => p.userId === activeSpeaker.userId) + 1} (${activeSpeaker.user.username})`)
     }
 
-    // New Nominations
     if (state.nominations?.length > (prev?.nominations?.length || 0)) {
       const latestId = state.nominations[state.nominations.length - 1]
       const player = state.players.find((p: any) => p.userId === latestId)
@@ -78,7 +74,6 @@ export default function GamePage() {
       }
     }
 
-    // Deaths
     state.players.forEach((p: any, idx: number) => {
       const prevP = prev?.players?.find((x: any) => x.userId === p.userId)
       if (prevP && prevP.isAlive && !p.isAlive) {
@@ -95,10 +90,6 @@ export default function GamePage() {
 
     prevStateRef.current = { ...state, activeSpeakerId: activeSpeaker?.userId }
   }, [state, activeSpeaker])
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [chatMessages])
 
   const myChecks =
     role === "commissar"
@@ -274,18 +265,6 @@ export default function GamePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, targetId }),
     })
-  }
-
-  const sendChatMessage = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!chatInput.trim()) return
-    const msg: ChatMessage = {
-      id: Math.random().toString(36),
-      text: chatInput,
-      type: "self"
-    }
-    setChatMessages(prev => [...prev, msg])
-    setChatInput("")
   }
 
   const isDiscussion = state.phase === "discussion"
@@ -464,26 +443,13 @@ export default function GamePage() {
 
         {/* 4. Chat Sidebar */}
         <div className={`${styles.chatSidebar} ${isChatCollapsed ? styles.chatCollapsed : ""}`}>
-          <div className={styles.chatHeader}>Чат гри</div>
-          <div className={styles.chatMessages}>
-            {chatMessages.length === 0 && <p style={{ color: "var(--moon-text-dim)", fontSize: "0.875rem" }}>Повідомлення з'являться тут...</p>}
-            {chatMessages.map(msg => (
-              <div key={msg.id} className={`${styles.msg} ${msg.type === "system" ? styles.msgSystem : msg.type === "self" ? styles.msgUserSelf : styles.msgUser}`}>
-                {msg.text}
-              </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
-          <form className={styles.chatInputWrapper} onSubmit={sendChatMessage}>
-            <input
-              type="text"
-              className={styles.chatInput}
-              placeholder="Повідомлення..."
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-            />
-            <button type="submit" className={styles.actionButton} style={{ width: 'auto' }}>📎</button>
-          </form>
+          <GameChat
+            sessionId={sessionId}
+            logs={chatMessages}
+            user={{ ...me.user, id: userId }}
+            isAlive={!!me?.isAlive}
+            gameState={state}
+          />
         </div>
       </div>
     </div>

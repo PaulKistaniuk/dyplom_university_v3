@@ -119,3 +119,19 @@ model LobbyPlayer {
   isReady  Boolean  @default(false)
   joinedAt DateTime @default(now())
 }
+
+model News {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  imageUrl    String?
+  size        String   // "major" | "minor"
+  date        DateTime @default(now())
+  
+  // Array of sections: Array<{ sectionName: string, subsectionName: string, bullets: string[] }>
+  sections    Json     @default("[]")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+

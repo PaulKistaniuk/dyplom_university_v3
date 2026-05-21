@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
     }
 
     // DEAD CHECK
-    if (!player.isAlive) {
+    const playerState = (player.state as any) || {}
+    const isAlive = playerState.isAlive !== false
+    if (!isAlive) {
       return NextResponse.json(
         { error: "Dead players can't act" },
         { status: 403 }
@@ -65,27 +67,39 @@ export async function POST(req: NextRequest) {
     }
 
     // ACTIONS
-    const actions = (game.actions as any) || {}
+    const gameState = (game.state as any) || {}
     const role = player.role
     const userId = player.userId
-    const checkedPlayers = (player.checkedPlayers as string[]) || []
+    const checkedPlayers = playerState.checkedPlayers || []
+
+    const actions = (game.actions as any) || {}
+    const timeline = Array.isArray(actions.timeline) ? actions.timeline : []
 
     // KILL (mafia + don)
     if (actionType === "kill") {
-      if (!["mafia", "don"].includes(player.role)) {
+      if (!["mafia", "don"].includes(player.role || "")) {
         return NextResponse.json({ error: "Not allowed" }, { status: 403 })
       }
 
-      if (!actions.mafiaVotes) {
-        actions.mafiaVotes = {}
+      if (!gameState.mafiaVotes) {
+        gameState.mafiaVotes = {}
       }
 
-      actions.mafiaVotes[player.userId] = targetId
+      gameState.mafiaVotes[player.userId] = targetId
 
       // пріоритет дна
       if (player.role === "don") {
-        actions.donKill = targetId
+        gameState.donKill = targetId
       }
+
+      timeline.push({
+        type: "night_action",
+        action: "kill_vote",
+        userId: player.userId,
+        targetId,
+        dayNumber: game.dayNumber,
+        timestamp: Date.now(),
+      })
     }
 
     // CHECK (commissar + don)
@@ -111,26 +125,36 @@ export async function POST(req: NextRequest) {
             ? "mafia"
             : "citizen"
 
-        const currentChecked = Array.isArray(player.checkedPlayers)
-          ? player.checkedPlayers
-          : []
-
         await prisma.gamePlayer.update({
           where: { id: player.id },
           data: {
-            checkedPlayers: [...currentChecked, targetId],
+            state: {
+              ...playerState,
+              checkedPlayers: [...checkedPlayers, targetId],
+            },
           },
         })
 
-        actions.commissarChecks = [
-          ...(actions.commissarChecks || []),
+        gameState.commissarChecks = [
+          ...(gameState.commissarChecks || []),
           {
             by: userId,
             targetId,
             result,
           },
         ]
-        actions.currentNightCommissarCheck = targetId
+        gameState.currentNightCommissarCheck = targetId
+        gameState.check = targetId
+
+        timeline.push({
+          type: "night_action",
+          action: "check",
+          userId,
+          targetId,
+          result,
+          dayNumber: game.dayNumber,
+          timestamp: Date.now(),
+        })
       }
 
       // DON
@@ -144,26 +168,36 @@ export async function POST(req: NextRequest) {
             ? "commissar"
             : "not_commissar"
 
-        const currentChecked = Array.isArray(player.checkedPlayers)
-          ? player.checkedPlayers
-          : []
-
         await prisma.gamePlayer.update({
           where: { id: player.id },
           data: {
-            checkedPlayers: [...currentChecked, targetId],
+            state: {
+              ...playerState,
+              checkedPlayers: [...checkedPlayers, targetId],
+            },
           },
         })
 
-        actions.donChecks = [
-          ...(actions.donChecks || []),
+        gameState.donChecks = [
+          ...(gameState.donChecks || []),
           {
             by: userId,
             targetId,
             result,
           },
         ]
-        actions.currentNightDonCheck = targetId
+        gameState.currentNightDonCheck = targetId
+        // don checks don't use resolveNight check target, that is only for Sheriff/Commissar
+
+        timeline.push({
+          type: "night_action",
+          action: "don_check",
+          userId,
+          targetId,
+          result,
+          dayNumber: game.dayNumber,
+          timestamp: Date.now(),
+        })
       }
     }
 
@@ -173,44 +207,58 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Not allowed" }, { status: 403 })
       }
 
-      const lastHeal = (game.actions as any)?.lastHeal
-      const selfHealUsed = player.healsUsed > 0
+      const lastHeal = gameState.lastHeal
+      const healsUsed = playerState.healsUsed || 0
+      const selfHeals = playerState.selfHeals || 0
 
       if (lastHeal === targetId) {
         return NextResponse.json({ error: "Can't heal same target twice" }, { status: 400 })
       }
 
-      if (targetId === player.userId && selfHealUsed) {
+      if (targetId === player.userId && selfHeals > 0) {
         return NextResponse.json({ error: "Self heal already used" }, { status: 400 })
       }
 
-      actions.heal = targetId
+      gameState.heal = targetId
+
+      timeline.push({
+        type: "night_action",
+        action: "heal",
+        userId,
+        targetId,
+        dayNumber: game.dayNumber,
+        timestamp: Date.now(),
+      })
     }
 
     // SAVE
     await prisma.gameSession.update({
       where: { id: sessionId },
       data: {
-        actions,
+        state: gameState,
+        actions: {
+          ...actions,
+          timeline,
+        },
       },
     })
 
     // ДОБАВЛЯЄМО АВТОПЕРЕХІД
 
-    const alivePlayers = game.players.filter(p => p.isAlive)
+    const alivePlayers = game.players.filter(p => (p.state as any)?.isAlive ?? true)
 
     // MAFIA → DON
     if (game.phase === "mafia") {
-      const mafia = alivePlayers.filter(p => ["mafia", "don"].includes(p.role))
+      const mafia = alivePlayers.filter(p => ["mafia", "don"].includes(p.role || ""))
 
-      const allVoted = mafia.every(p => actions.mafiaVotes?.[p.userId])
+      const allVoted = mafia.every(p => gameState.mafiaVotes?.[p.userId])
 
       if (allVoted) {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
             phase: "don",
-            actions: { ...actions, phaseStartedAt: Date.now() },
+            state: { ...gameState, phaseStartedAt: Date.now() },
           },
         })
       }
@@ -218,14 +266,14 @@ export async function POST(req: NextRequest) {
 
     // DON → COMMISSAR
     else if (game.phase === "don") {
-      const hasDonCheck = !!actions.currentNightDonCheck
+      const hasDonCheck = !!gameState.currentNightDonCheck
 
       if (hasDonCheck) {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
             phase: "commissar",
-            actions: { ...actions, phaseStartedAt: Date.now() },
+            state: { ...gameState, phaseStartedAt: Date.now() },
           },
         })
       }
@@ -233,14 +281,14 @@ export async function POST(req: NextRequest) {
 
     // COMMISSAR → DOCTOR
     else if (game.phase === "commissar") {
-      const hasCheck = !!actions.currentNightCommissarCheck
+      const hasCheck = !!gameState.currentNightCommissarCheck
 
       if (hasCheck) {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
             phase: "doctor",
-            actions: { ...actions, phaseStartedAt: Date.now() },
+            state: { ...gameState, phaseStartedAt: Date.now() },
           },
         })
       }
@@ -248,28 +296,38 @@ export async function POST(req: NextRequest) {
 
     // DOCTOR → DAY
     else if (game.phase === "doctor") {
-      const hasHeal = !!actions.heal
+      const hasHeal = !!gameState.heal
       if (hasHeal) {
         // We use the same complex logic as next/route.ts
-        const result = await resolveNight(actions, game.players)
+        const result = resolveNight(gameState, game.players)
 
         if (result.killedPlayerId) {
-          await prisma.gamePlayer.updateMany({
-            where: { gameId: sessionId, userId: result.killedPlayerId },
-            data: { isAlive: false },
-          })
+          const killedPlayer = game.players.find(p => p.userId === result.killedPlayerId)
+          if (killedPlayer) {
+            const killedState = (killedPlayer.state as any) || {}
+            killedState.isAlive = false
+            await prisma.gamePlayer.update({
+              where: { id: killedPlayer.id },
+              data: { state: killedState },
+            })
+          }
         }
 
         const doctor = game.players.find(p => p.role === "doctor")
-        if (doctor && actions.heal === doctor.userId) {
+        if (doctor && gameState.heal === doctor.userId) {
+          const docState = (doctor.state as any) || {}
+          docState.healsUsed = (docState.healsUsed || 0) + 1
+          if (gameState.heal === doctor.userId) {
+            docState.selfHeals = (docState.selfHeals || 0) + 1
+          }
           await prisma.gamePlayer.update({
             where: { id: doctor.id },
-            data: { healsUsed: { increment: 1 } },
+            data: { state: docState },
           })
         }
 
         // Helper to find first speaker
-        const isAliveNow = (p: any) => p.isAlive && p.userId !== result.killedPlayerId
+        const isAliveNow = (p: any) => ((p.state as any)?.isAlive ?? true) && p.userId !== result.killedPlayerId
         const alivePlayersTemp = game.players.filter(isAliveNow)
         let firstSpeaker = 0
         if (alivePlayersTemp.length > 0) {
@@ -292,17 +350,18 @@ export async function POST(req: NextRequest) {
           data: {
             status: "day",
             phase: nextPhase,
-            actions: {
-              ...actions,
+            state: {
+              ...gameState,
               lastCheck: result.checkedPlayerId,
               checkResult: result.checkResult,
-              lastHeal: actions.heal,
+              lastHeal: gameState.heal,
               currentSpeakerIndex: firstSpeaker,
               speakersCount: 1,
               phaseStartedAt: Date.now(),
               heal: null,
               currentNightDonCheck: null,
               currentNightCommissarCheck: null,
+              check: null,
               nightKilledId: result.killedPlayerId,
               nominations: [],
               firstSpeakerUserId: alivePlayersTemp[firstSpeaker]?.userId,

@@ -67,10 +67,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const takenSeats = lobby.players.map(p => p.number || 0)
+    let freeSeat = 1
+    for (let i = 1; i <= lobby.maxPlayers; i++) {
+      if (!takenSeats.includes(i)) {
+        freeSeat = i
+        break
+      }
+    }
+
     const player = await prisma.lobbyPlayer.create({
       data: {
         userId: payload.userId,
         lobbyId,
+        number: freeSeat,
       },
     })
 

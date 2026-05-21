@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         players: {
           create: {
             userId: payload.userId,
+            number: 1,
           },
         },
       },

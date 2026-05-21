@@ -14,11 +14,13 @@ import jwt from "jsonwebtoken"
  */
 function getFirstSpeakerIndex(
   dayNumber: number,
-  allPlayers: { userId: string; isAlive: boolean }[],
+  allPlayers: any[],
   killedThisRound?: string | null,
 ): number {
-  const isAliveNow = (p: { userId: string; isAlive: boolean }) =>
-    p.isAlive && p.userId !== killedThisRound
+  const isAliveNow = (p: any) => {
+    const isAlive = (p.state as any)?.isAlive ?? true
+    return isAlive && p.userId !== killedThisRound
+  }
 
   const alivePlayers = allPlayers.filter(isAliveNow)
   if (alivePlayers.length === 0) return 0
@@ -54,18 +56,20 @@ export async function POST(req: NextRequest) {
   const payload: any = jwt.verify(token, process.env.JWT_SECRET!)
   const currentUserId = payload.userId
 
-  // Shared: read actions once
+  // Shared: read gameState and actions
+  const gameState = (game.state as any) || {}
   const actions = (game.actions as any) || {}
   const now = Date.now()
-  const startedAt: number = actions.phaseStartedAt ?? now
+  const startedAt: number = gameState.phaseStartedAt ?? now
 
   // Mirror the frontend duration logic
   const getActiveRoleAlive = (): boolean => {
     const p = game.players
-    if (game.phase === "mafia") return p.some(x => ["mafia", "don"].includes(x.role) && x.isAlive)
-    if (game.phase === "don") return p.some(x => x.role === "don" && x.isAlive)
-    if (game.phase === "commissar") return p.some(x => x.role === "commissar" && x.isAlive)
-    if (game.phase === "doctor") return p.some(x => x.role === "doctor" && x.isAlive)
+    const isAlive = (player: any) => (player.state as any)?.isAlive ?? true
+    if (game.phase === "mafia") return p.some(x => ["mafia", "don"].includes(x.role || "") && isAlive(x))
+    if (game.phase === "don") return p.some(x => x.role === "don" && isAlive(x))
+    if (game.phase === "commissar") return p.some(x => x.role === "commissar" && isAlive(x))
+    if (game.phase === "doctor") return p.some(x => x.role === "doctor" && isAlive(x))
     return true
   }
 
@@ -95,10 +99,29 @@ export async function POST(req: NextRequest) {
   // Helper for transitioning to night
   const goToNight = async (killedPlayerId?: string | null) => {
     if (killedPlayerId) {
-      await prisma.gamePlayer.updateMany({
-        where: { gameId: sessionId, userId: killedPlayerId },
-        data: { isAlive: false },
+      const gp = await prisma.gamePlayer.findFirst({
+        where: { gameId: sessionId, userId: killedPlayerId }
       })
+      if (gp) {
+        const gpState = (gp.state as any) || {}
+        gpState.isAlive = false
+        await prisma.gamePlayer.update({
+          where: { id: gp.id },
+          data: { state: gpState }
+        })
+      }
+    }
+
+    const updatedState = {
+      ...gameState,
+      votes: {},
+      mafiaVotes: {},
+      donKill: null,
+      heal: null,
+      check: null,
+      currentNightDonCheck: null,
+      currentNightCommissarCheck: null,
+      phaseStartedAt: Date.now(),
     }
 
     await prisma.gameSession.update({
@@ -107,16 +130,7 @@ export async function POST(req: NextRequest) {
         status: "night",
         phase: "mafia",
         dayNumber: { increment: 1 },
-        actions: {
-          ...actions,
-          votes: {},
-          mafiaVotes: {},
-          donKill: null,
-          heal: null,
-          currentNightDonCheck: null,
-          currentNightCommissarCheck: null,
-          phaseStartedAt: Date.now(),
-        },
+        state: updatedState,
       },
     })
 
@@ -133,6 +147,7 @@ export async function POST(req: NextRequest) {
         const isMafiaTeam = p.role === "mafia" || p.role === "don";
         const isWin = (winner === "mafia" && isMafiaTeam) || (winner === "citizens" && !isMafiaTeam);
         return {
+          gameId: sessionId,
           userId: p.userId,
           gameType: "mafia",
           result: isWin ? "win" : "lose",
@@ -144,25 +159,17 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── CORE PROGRESSION LOGIC ───────────────────────────────────────────
-  // We handle both auto-skip and manual next here.
-  // For manual next on phases where a specific user must click (day discussion), we check auth.
-  // Other phases anyone can trigger (or auto-skip triggers).
-
-  const alivePlayers = game.players.filter(p => p.isAlive)
+  const alivePlayers = game.players.filter(p => (p.state as any)?.isAlive ?? true)
 
   if (game.status === "night") {
-    // Auth check for manual
-    if (!isExpired && game.phase === "doctor") {
-      // no auth for night transitions, handled by button visibility
-    }
-
     if (isExpired || !isExpired) { // Just run the logic
-      // removed day 1 instant skip so Night 1 phases play out for mafia introduction
-
       if (game.phase === "mafia") {
         await prisma.gameSession.update({
           where: { id: sessionId },
-          data: { phase: "don", actions: { ...actions, phaseStartedAt: Date.now() } },
+          data: {
+            phase: "don",
+            state: { ...gameState, phaseStartedAt: Date.now() },
+          },
         })
         return NextResponse.json({ success: true })
       }
@@ -170,7 +177,10 @@ export async function POST(req: NextRequest) {
       if (game.phase === "don") {
         await prisma.gameSession.update({
           where: { id: sessionId },
-          data: { phase: "commissar", actions: { ...actions, phaseStartedAt: Date.now() } },
+          data: {
+            phase: "commissar",
+            state: { ...gameState, phaseStartedAt: Date.now() },
+          },
         })
         return NextResponse.json({ success: true })
       }
@@ -178,56 +188,75 @@ export async function POST(req: NextRequest) {
       if (game.phase === "commissar") {
         await prisma.gameSession.update({
           where: { id: sessionId },
-          data: { phase: "doctor", actions: { ...actions, phaseStartedAt: Date.now() } },
+          data: {
+            phase: "doctor",
+            state: { ...gameState, phaseStartedAt: Date.now() },
+          },
         })
         return NextResponse.json({ success: true })
       }
 
       if (game.phase === "doctor") {
-        const result = resolveNight(actions, game.players)
+        const result = resolveNight(gameState, game.players)
 
         if (result.killedPlayerId) {
-          await prisma.gamePlayer.updateMany({
-            where: { gameId: sessionId, userId: result.killedPlayerId },
-            data: { isAlive: false },
-          })
+          const killedPlayer = game.players.find(p => p.userId === result.killedPlayerId)
+          if (killedPlayer) {
+            const killedState = (killedPlayer.state as any) || {}
+            killedState.isAlive = false
+            await prisma.gamePlayer.update({
+              where: { id: killedPlayer.id },
+              data: { state: killedState },
+            })
+          }
         }
 
         const doctor = await prisma.gamePlayer.findFirst({
           where: { gameId: sessionId, role: "doctor" },
         })
-        if (doctor && actions.heal === doctor.userId) {
+        if (doctor && gameState.heal === doctor.userId) {
+          const docState = (doctor.state as any) || {}
+          docState.healsUsed = (docState.healsUsed || 0) + 1
+          if (gameState.heal === doctor.userId) {
+            docState.selfHeals = (docState.selfHeals || 0) + 1
+          }
           await prisma.gamePlayer.update({
             where: { id: doctor.id },
-            data: { healsUsed: { increment: 1 } },
+            data: { state: docState },
           })
         }
 
         const nextPhase = (result.killedPlayerId && game.lobby.lastWords) ? "night_kill_speech" : "discussion"
         const firstSpeaker = getFirstSpeakerIndex(game.dayNumber, game.players, result.killedPlayerId)
 
+        const isAliveNow = (p: any) => ((p.state as any)?.isAlive ?? true) && p.userId !== result.killedPlayerId
+        const alivePlayersTemp = game.players.filter(isAliveNow)
+
+        const updatedState = {
+          ...gameState,
+          lastCheck: result.checkedPlayerId,
+          checkResult: result.checkResult,
+          lastHeal: gameState.heal,
+          currentSpeakerIndex: firstSpeaker,
+          speakersCount: 1,
+          phaseStartedAt: Date.now(),
+          heal: null,
+          currentNightDonCheck: null,
+          currentNightCommissarCheck: null,
+          check: null,
+          nightKilledId: result.killedPlayerId,
+          nominations: [],
+          firstSpeakerUserId: alivePlayersTemp[firstSpeaker]?.userId,
+          nominationSpeakerIndex: 0,
+          revoteCandidates: [],
+        }
+
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
             status: "day",
             phase: nextPhase,
-            actions: {
-              ...actions,
-              lastCheck: result.checkedPlayerId,
-              checkResult: result.checkResult,
-              lastHeal: actions.heal,
-              currentSpeakerIndex: firstSpeaker,
-              speakersCount: 1,
-              phaseStartedAt: Date.now(),
-              heal: null,
-              currentNightDonCheck: null,
-              currentNightCommissarCheck: null,
-              nightKilledId: result.killedPlayerId,
-              nominations: [],
-              firstSpeakerUserId: game.players.filter(p => p.isAlive && p.userId !== result.killedPlayerId)[firstSpeaker]?.userId,
-              nominationSpeakerIndex: 0,
-              revoteCandidates: [],
-            },
+            state: updatedState,
           },
         })
 
@@ -244,6 +273,7 @@ export async function POST(req: NextRequest) {
             const isMafiaTeam = p.role === "mafia" || p.role === "don";
             const isWin = (nightWinner === "mafia" && isMafiaTeam) || (nightWinner === "citizens" && !isMafiaTeam);
             return {
+              gameId: sessionId,
               userId: p.userId,
               gameType: "mafia",
               result: isWin ? "win" : "lose",
@@ -265,14 +295,14 @@ export async function POST(req: NextRequest) {
         where: { id: sessionId },
         data: {
           phase: "discussion",
-          actions: { ...actions, phaseStartedAt: Date.now() },
+          state: { ...gameState, phaseStartedAt: Date.now() },
         },
       })
       return NextResponse.json({ success: true })
     }
 
     if (game.phase === "discussion") {
-      const currentSpeaker = alivePlayers[actions.currentSpeakerIndex || 0]
+      const currentSpeaker = alivePlayers[gameState.currentSpeakerIndex || 0]
 
       if (!isExpired) {
         // Manual auth check
@@ -282,27 +312,27 @@ export async function POST(req: NextRequest) {
       }
 
       // Check auto-nominate rule for the FIRST speaker
-      if (currentSpeaker && currentSpeaker.userId === actions.firstSpeakerUserId && game.dayNumber > 1) {
-        const noms = actions.nominations || []
+      if (currentSpeaker && currentSpeaker.userId === gameState.firstSpeakerUserId && game.dayNumber > 1) {
+        const noms = gameState.nominations || []
         if (noms.length === 0) {
           const possible = alivePlayers.filter(p => p.userId !== currentSpeaker.userId)
           if (possible.length > 0) {
             const rand = possible[Math.floor(Math.random() * possible.length)]
             noms.push(rand.userId)
-            actions.nominations = noms
+            gameState.nominations = noms
           }
         }
       }
 
-      const speakersCount = (actions.speakersCount || 1) + 1
-      const currentIndex = ((actions.currentSpeakerIndex || 0) + 1) % alivePlayers.length
+      const speakersCount = (gameState.speakersCount || 1) + 1
+      const currentIndex = ((gameState.currentSpeakerIndex || 0) + 1) % alivePlayers.length
 
       if (speakersCount > alivePlayers.length) {
         if (game.dayNumber === 1) {
           await goToNight()
           return NextResponse.json({ success: true })
         } else {
-          const noms = actions.nominations || []
+          const noms = gameState.nominations || []
           if (noms.length === 0) {
             await goToNight()
             return NextResponse.json({ success: true })
@@ -312,7 +342,7 @@ export async function POST(req: NextRequest) {
                 where: { id: sessionId },
                 data: {
                   phase: "single_elim_speech",
-                  actions: { ...actions, phaseStartedAt: Date.now(), nominationSpeakerIndex: 0 },
+                  state: { ...gameState, phaseStartedAt: Date.now(), nominationSpeakerIndex: 0 },
                 },
               })
               return NextResponse.json({ success: true })
@@ -325,7 +355,7 @@ export async function POST(req: NextRequest) {
               where: { id: sessionId },
               data: {
                 phase: "nomination_defense",
-                actions: { ...actions, phaseStartedAt: Date.now(), nominationSpeakerIndex: 0 },
+                state: { ...gameState, phaseStartedAt: Date.now(), nominationSpeakerIndex: 0 },
               },
             })
             return NextResponse.json({ success: true })
@@ -335,7 +365,7 @@ export async function POST(req: NextRequest) {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
-            actions: { ...actions, currentSpeakerIndex: currentIndex, speakersCount, phaseStartedAt: Date.now() },
+            state: { ...gameState, currentSpeakerIndex: currentIndex, speakersCount, phaseStartedAt: Date.now() },
           },
         })
         return NextResponse.json({ success: true })
@@ -343,18 +373,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (game.phase === "single_elim_speech" || game.phase === "voting_elim_speech") {
-      const eliminatedId = game.phase === "single_elim_speech" ? (actions.nominations || [])[0] : actions.nightKilledId
+      const eliminatedId = game.phase === "single_elim_speech" ? (gameState.nominations || [])[0] : gameState.nightKilledId
       await goToNight(eliminatedId)
       return NextResponse.json({ success: true })
     }
 
     if (game.phase === "nomination_defense") {
-      const noms = actions.nominations || []
-      const nextIndex = (actions.nominationSpeakerIndex || 0) + 1
+      const noms = gameState.nominations || []
+      const nextIndex = (gameState.nominationSpeakerIndex || 0) + 1
 
       if (!isExpired) {
         // Manual auth check
-        const currentDefendingId = noms[actions.nominationSpeakerIndex || 0]
+        const currentDefendingId = noms[gameState.nominationSpeakerIndex || 0]
         if (currentDefendingId !== currentUserId) {
           return NextResponse.json({ error: "Not your turn" }, { status: 403 })
         }
@@ -366,14 +396,14 @@ export async function POST(req: NextRequest) {
           data: {
             status: "voting",
             phase: "voting",
-            actions: { ...actions, votes: {}, phaseStartedAt: Date.now() },
+            state: { ...gameState, votes: {}, phaseStartedAt: Date.now() },
           },
         })
       } else {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
-            actions: { ...actions, nominationSpeakerIndex: nextIndex, phaseStartedAt: Date.now() },
+            state: { ...gameState, nominationSpeakerIndex: nextIndex, phaseStartedAt: Date.now() },
           },
         })
       }
@@ -383,10 +413,10 @@ export async function POST(req: NextRequest) {
 
   if (game.status === "voting") {
     if (game.phase === "voting") {
-      const noms = actions.nominations || []
+      const noms = gameState.nominations || []
       const fallbackTarget = noms[noms.length - 1]
 
-      const votes = actions.votes || {}
+      const votes = gameState.votes || {}
       alivePlayers.forEach(p => {
         if (!votes[p.userId]) {
           votes[p.userId] = fallbackTarget
@@ -401,7 +431,7 @@ export async function POST(req: NextRequest) {
             data: {
               status: "day",
               phase: "voting_elim_speech",
-              actions: { ...actions, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now() },
+              state: { ...gameState, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now() },
             },
           })
         } else {
@@ -412,7 +442,7 @@ export async function POST(req: NextRequest) {
           where: { id: sessionId },
           data: {
             phase: "revote_defense",
-            actions: { ...actions, votes: {}, revoteCandidates: result.leaders, nominationSpeakerIndex: 0, phaseStartedAt: Date.now() },
+            state: { ...gameState, votes: {}, revoteCandidates: result.leaders, nominationSpeakerIndex: 0, phaseStartedAt: Date.now() },
           },
         })
       }
@@ -420,12 +450,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (game.phase === "revote_defense") {
-      const revoteCandidates = actions.revoteCandidates || []
-      const nextIndex = (actions.nominationSpeakerIndex || 0) + 1
+      const revoteCandidates = gameState.revoteCandidates || []
+      const nextIndex = (gameState.nominationSpeakerIndex || 0) + 1
 
       if (!isExpired) {
         // Manual auth check
-        const currentDefendingId = revoteCandidates[actions.nominationSpeakerIndex || 0]
+        const currentDefendingId = revoteCandidates[gameState.nominationSpeakerIndex || 0]
         if (currentDefendingId !== currentUserId) {
           return NextResponse.json({ error: "Not your turn" }, { status: 403 })
         }
@@ -436,14 +466,14 @@ export async function POST(req: NextRequest) {
           where: { id: sessionId },
           data: {
             phase: "revote",
-            actions: { ...actions, votes: {}, phaseStartedAt: Date.now() },
+            state: { ...gameState, votes: {}, phaseStartedAt: Date.now() },
           },
         })
       } else {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
-            actions: { ...actions, nominationSpeakerIndex: nextIndex, phaseStartedAt: Date.now() },
+            state: { ...gameState, nominationSpeakerIndex: nextIndex, phaseStartedAt: Date.now() },
           },
         })
       }
@@ -451,10 +481,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (game.phase === "revote") {
-      const revoteCandidates = actions.revoteCandidates || []
+      const revoteCandidates = gameState.revoteCandidates || []
       const fallbackTarget = revoteCandidates[revoteCandidates.length - 1]
 
-      const votes = actions.votes || {}
+      const votes = gameState.votes || {}
       alivePlayers.forEach(p => {
         if (!votes[p.userId]) {
           votes[p.userId] = fallbackTarget
@@ -469,7 +499,7 @@ export async function POST(req: NextRequest) {
             data: {
               status: "day",
               phase: "voting_elim_speech",
-              actions: { ...actions, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now() },
+              state: { ...gameState, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now() },
             },
           })
         } else {
@@ -496,6 +526,7 @@ export async function POST(req: NextRequest) {
       const isMafiaTeam = p.role === "mafia" || p.role === "don";
       const isWin = (winner === "mafia" && isMafiaTeam) || (winner === "citizens" && !isMafiaTeam);
       return {
+        gameId: sessionId,
         userId: p.userId,
         gameType: "mafia",
         result: isWin ? "win" : "lose",

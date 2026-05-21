@@ -69,9 +69,11 @@ export async function POST(req: NextRequest) {
       session = await prisma.gameSession.create({
         data: {
           lobbyId: lobbyId,
+          gameType: "whoami",
           status: "writing",
           phase: "submit_words",
           dayNumber: 0,
+          settings: lobby.settings ?? {},
           actions: {
             submittedWords: {},
             assignments: {},
@@ -90,16 +92,44 @@ export async function POST(req: NextRequest) {
           userId: p.userId,
           gameId: session.id,
           role: "player",
+          number: p.number || 1,
+          state: {},
+          personal: {},
         })),
       })
     } else {
-      // ===== Мафія (існуюча логіка, не чіпаємо) =====
+      // ===== Мафія =====
       session = await prisma.gameSession.create({
         data: {
           lobbyId: lobbyId,
+          gameType: "mafia",
           status: "night",
           phase: "mafia",
           dayNumber: 1,
+          settings: {
+            revealRoles: lobby.revealRoles,
+            lastWords: lobby.lastWords,
+          },
+          state: {
+            phaseStartedAt: Date.now(),
+            currentSpeakerIndex: 0,
+            speakersCount: 0,
+            nominations: [],
+            votes: {},
+            mafiaVotes: {},
+            heal: null,
+            lastHeal: null,
+            currentNightDonCheck: null,
+            currentNightCommissarCheck: null,
+            lastCheck: null,
+            checkResult: null,
+            nightKilledId: null,
+            revoteCandidates: [],
+            nominationSpeakerIndex: 0,
+          },
+          actions: {
+            timeline: [],
+          },
         },
       })
 
@@ -111,6 +141,18 @@ export async function POST(req: NextRequest) {
           userId: p.userId,
           gameId: session.id,
           role: roles[index],
+          number: p.number || (index + 1),
+          state: {
+            isAlive: true,
+            healsUsed: 0,
+            selfHeals: 0,
+            checksUsed: 0,
+            checkedPlayers: [],
+            hasVoted: false,
+          },
+          personal: {
+            investigation: {},
+          },
         })),
       })
     }

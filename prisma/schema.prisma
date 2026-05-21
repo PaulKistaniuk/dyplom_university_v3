@@ -27,18 +27,21 @@ model User {
 }
 
 model GameSession {
-  id      String @id @default(uuid())
-  lobbyId String
+  id       String @id @default(uuid())
+  lobbyId  String
+  gameType String @default("mafia") // "mafia" | "whoami" | "bunker"
 
   status String // waiting | night | day | voting | finished
-  phase  String // mafia | don | commissar | doctor | discussion | voting | revote_defense | night_kill_speech | voting_elim_speech | single_elim_speech
+  phase  String // mafia | don | commissar | doctor | discussion | voting | revote_defense etc.
 
   dayNumber Int @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  actions Json @default("{}")
+  settings Json @default("{}")
+  state    Json @default("{}")
+  actions  Json @default("{}")
 
   players GamePlayer[]
 
@@ -47,15 +50,18 @@ model GameSession {
 
 model GameResult {
   id       String @id @default(uuid())
+  gameId   String
   userId   String
-  gameType String // "mafia" | "bunker"
+  gameType String // "mafia" | "bunker" | "whoami"
 
   result String // "win" | "lose"
-  stats  Json // Поки що так, ймовірніше за все згодом буде розділення для кожної гри окремо
+  stats  Json   @default("{}")
 
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([gameId])
 }
 
 model GamePlayer {
@@ -64,20 +70,16 @@ model GamePlayer {
   gameId String
   userId String
 
-  role    String // mafia | don | commissar | doctor | citizen
-  isAlive Boolean @default(true)
-  number  Int     @default(0)
+  number Int
+  role   String?
 
-  // нічні дії
-  hasVoted Boolean @default(false)
+  state    Json @default("{}")
+  personal Json @default("{}")
 
-  // обмеження ролей
-  checksUsed     Int  @default(0)
-  healsUsed      Int  @default(0)
-  checkedPlayers Json @default("[]")
-
-  game GameSession @relation(fields: [gameId], references: [id])
+  game GameSession @relation(fields: [gameId], references: [id], onDelete: Cascade)
   user User        @relation(fields: [userId], references: [id])
+
+  @@unique([gameId, number])
 }
 
 model Lobby {
@@ -118,6 +120,9 @@ model LobbyPlayer {
 
   isReady  Boolean  @default(false)
   joinedAt DateTime @default(now())
+  number   Int      @default(0)
+
+  @@unique([lobbyId, number])
 }
 
 model News {

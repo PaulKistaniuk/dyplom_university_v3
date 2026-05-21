@@ -32,14 +32,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "game not found" }, { status: 404 })
   }
 
-  const actions = (game.actions as any) || {}
+  const gameState = (game.state as any) || {}
 
   const getActiveRoleAlive = (): boolean => {
     const p = game.players
-    if (game.phase === "mafia") return p.some(x => ["mafia", "don"].includes(x.role) && x.isAlive)
-    if (game.phase === "don") return p.some(x => x.role === "don" && x.isAlive)
-    if (game.phase === "commissar") return p.some(x => x.role === "commissar" && x.isAlive)
-    if (game.phase === "doctor") return p.some(x => x.role === "doctor" && x.isAlive)
+    const isAlive = (player: any) => (player.state as any)?.isAlive ?? true
+    if (game.phase === "mafia") return p.some(x => ["mafia", "don"].includes(x.role || "") && isAlive(x))
+    if (game.phase === "don") return p.some(x => x.role === "don" && isAlive(x))
+    if (game.phase === "commissar") return p.some(x => x.role === "commissar" && isAlive(x))
+    if (game.phase === "doctor") return p.some(x => x.role === "doctor" && isAlive(x))
     return true
   }
 
@@ -65,33 +66,38 @@ export async function GET(req: NextRequest) {
     dayNumber: game.dayNumber,
     phase: game.phase,
     phaseDuration: getDuration() / 1000,
-    players: game.players.map(p => ({
-      userId: p.userId,
-      isAlive: p.isAlive,
-      healsUsed: p.healsUsed,
-      role: p.userId === currentUserId || game.status === "finished" ? p.role : undefined,
-      checkedPlayers: p.checkedPlayers,
-      user: {
-        username: p.user.username,
-        avatarUrl: p.user.avatarUrl,
-      },
-    })),
-    votes: actions.votes || {},
-    checkResult: actions.checkResult || null,
-    commissarChecks: actions.commissarChecks || [],
-    donChecks: actions.donChecks || [],
-    mafiaVotes: actions.mafiaVotes || {},
-    lastCheck: actions.lastCheck || null,
-    lastHeal: actions.lastHeal || null,
-    currentHeal: actions.heal || null,
-    currentNightDonCheck: actions.currentNightDonCheck || null,
-    currentNightCommissarCheck: actions.currentNightCommissarCheck || null,
-    currentSpeakerIndex: actions.currentSpeakerIndex || 0,
-    phaseStartedAt: actions.phaseStartedAt || null,
-    nominations: actions.nominations || [],
-    revoteCandidates: actions.revoteCandidates || [],
-    nominationSpeakerIndex: actions.nominationSpeakerIndex || 0,
-    nightKilledId: actions.nightKilledId || null,
-    firstSpeakerUserId: actions.firstSpeakerUserId || null,
+    players: game.players.map(p => {
+      const pState = (p.state as any) || {}
+      return {
+        userId: p.userId,
+        isAlive: pState.isAlive ?? true,
+        healsUsed: pState.healsUsed ?? 0,
+        role: p.userId === currentUserId || game.status === "finished" ? (p.role || undefined) : undefined,
+        checkedPlayers: pState.checkedPlayers || [],
+        user: {
+          username: p.user.username,
+          avatarUrl: p.user.avatarUrl,
+        },
+        number: p.number,
+        investigation: (p.personal as any)?.investigation || {}
+      }
+    }),
+    votes: gameState.votes || {},
+    checkResult: gameState.checkResult || null,
+    commissarChecks: gameState.commissarChecks || [],
+    donChecks: gameState.donChecks || [],
+    mafiaVotes: gameState.mafiaVotes || {},
+    lastCheck: gameState.lastCheck || null,
+    lastHeal: gameState.lastHeal || null,
+    currentHeal: gameState.heal || null,
+    currentNightDonCheck: gameState.currentNightDonCheck || null,
+    currentNightCommissarCheck: gameState.currentNightCommissarCheck || null,
+    currentSpeakerIndex: gameState.currentSpeakerIndex || 0,
+    phaseStartedAt: gameState.phaseStartedAt || null,
+    nominations: gameState.nominations || [],
+    revoteCandidates: gameState.revoteCandidates || [],
+    nominationSpeakerIndex: gameState.nominationSpeakerIndex || 0,
+    nightKilledId: gameState.nightKilledId || null,
+    firstSpeakerUserId: gameState.firstSpeakerUserId || null,
   })
 }

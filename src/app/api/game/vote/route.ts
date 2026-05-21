@@ -22,7 +22,11 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  if (!player || !player.isAlive) {
+  if (!player) {
+    return NextResponse.json({ error: "Player not found" }, { status: 404 })
+  }
+  const isAlive = (player.state as any)?.isAlive ?? true
+  if (!isAlive) {
     return NextResponse.json({ error: "Dead players can't vote" }, { status: 403 })
   }
 
@@ -33,29 +37,46 @@ export async function POST(req: NextRequest) {
   if (!game) return NextResponse.json({ error: "Game not found" }, { status: 404 })
   if (game.status !== "voting") return NextResponse.json({ error: "Not voting phase" }, { status: 400 })
 
-  const actions = (game.actions as any) || {}
+  const gameState = (game.state as any) || {}
 
   if (game.phase === "voting") {
-    const nominations = actions.nominations || []
+    const nominations = gameState.nominations || []
     if (!nominations.includes(targetId)) {
       return NextResponse.json({ error: "Target is not nominated" }, { status: 400 })
     }
   } else if (game.phase === "revote") {
-    const revoteCandidates = actions.revoteCandidates || []
+    const revoteCandidates = gameState.revoteCandidates || []
     if (!revoteCandidates.includes(targetId)) {
       return NextResponse.json({ error: "Target is not in revote" }, { status: 400 })
     }
   }
 
-  if (!actions.votes) {
-    actions.votes = {}
+  if (!gameState.votes) {
+    gameState.votes = {}
   }
 
-  actions.votes[payload.userId] = targetId
+  gameState.votes[payload.userId] = targetId
+
+  const actions = (game.actions as any) || {}
+  const timeline = Array.isArray(actions.timeline) ? actions.timeline : []
+  timeline.push({
+    type: "vote",
+    voterId: payload.userId,
+    targetId,
+    dayNumber: game.dayNumber,
+    phase: game.phase,
+    timestamp: Date.now(),
+  })
 
   await prisma.gameSession.update({
     where: { id: sessionId },
-    data: { actions },
+    data: {
+      state: gameState,
+      actions: {
+        ...actions,
+        timeline,
+      },
+    },
   })
 
   return NextResponse.json({ success: true })

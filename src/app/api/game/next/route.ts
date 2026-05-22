@@ -58,7 +58,11 @@ export async function POST(req: NextRequest) {
 
   // Shared: read gameState and actions
   const gameState = (game.state as any) || {}
-  const actions = (game.actions as any) || {}
+  const actions = (game.actions as any) || {};
+  // Ensure the snapshots container exists
+  actions.snapshots = actions.snapshots || { days: [], nights: [], votings: [] };
+  // Initialize timeline if missing
+  actions.timeline = actions.timeline || [];
   const now = Date.now()
   const startedAt: number = gameState.phaseStartedAt ?? now
 
@@ -112,6 +116,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const alivePlayersSnapshot = game.players
+      .filter(p => (p.state as any)?.isAlive ?? true)
+      .map(p => p.userId)
+
+    const deadPlayersSnapshot = game.players
+      .filter(p => !((p.state as any)?.isAlive ?? true))
+      .map(p => p.userId)
+
+    // Це просто візьме готовий об'єкт з твого стейту або поверне порожній
+    const nominationsSnapshot = gameState.nominatedBy || {};
+
+    actions.snapshots.days.push({
+      day: game.dayNumber,
+      type: "day",
+
+      alivePlayers: alivePlayersSnapshot,
+      deadPlayers: deadPlayersSnapshot,
+
+      nominations: nominationsSnapshot,
+
+      timestamp: Date.now(),
+    })
+
     const updatedState = {
       ...gameState,
       votes: {},
@@ -131,6 +158,7 @@ export async function POST(req: NextRequest) {
         phase: "mafia",
         dayNumber: { increment: 1 },
         state: updatedState,
+        actions: { timeline: actions.timeline, snapshots: actions.snapshots },
       },
     })
 
@@ -226,11 +254,59 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        const nextPhase = (result.killedPlayerId && game.lobby.lastWords) ? "night_kill_speech" : "discussion"
+        let nextPhase = "discussion";
+        
+        // Перевіряємо, чи є вбитий, і чи дозволені останні слова в лобі
+        if (result.killedPlayerId && game.lobby.lastWords) {
+          nextPhase = "night_kill_speech";
+        }
+        
         const firstSpeaker = getFirstSpeakerIndex(game.dayNumber, game.players, result.killedPlayerId)
-
         const isAliveNow = (p: any) => ((p.state as any)?.isAlive ?? true) && p.userId !== result.killedPlayerId
         const alivePlayersTemp = game.players.filter(isAliveNow)
+
+        const alivePlayersSnapshot = game.players
+        .filter(p => {
+          const alive = (p.state as any)?.isAlive ?? true
+          return alive && p.userId !== result.killedPlayerId
+        })
+        .map(p => p.userId)
+
+      const deadPlayersSnapshot = game.players
+        .filter(p => {
+          const alive = (p.state as any)?.isAlive ?? true
+          return !alive || p.userId === result.killedPlayerId
+        })
+        .map(p => p.userId)
+
+      actions.snapshots.nights.push({
+        night: game.dayNumber,
+
+        type: "night",
+
+        alivePlayers: alivePlayersSnapshot,
+        deadPlayers: deadPlayersSnapshot,
+
+        mafiaVotes: gameState.mafiaVotes || {},
+
+        finalKillTarget: gameState.donKill || null,
+
+        doctorHeal: gameState.heal || null,
+
+        savedPlayerId:
+          gameState.heal &&
+          gameState.heal === gameState.donKill
+            ? gameState.heal
+            : null,
+
+        donCheck: gameState.currentNightDonCheck || {},
+
+        commissarCheck: gameState.currentNightCommissarCheck || {},
+
+        killedPlayerId: result.killedPlayerId,
+
+        timestamp: Date.now(),
+      })
 
         const updatedState = {
           ...gameState,
@@ -249,6 +325,7 @@ export async function POST(req: NextRequest) {
           firstSpeakerUserId: alivePlayersTemp[firstSpeaker]?.userId,
           nominationSpeakerIndex: 0,
           revoteCandidates: [],
+          speechStartAt: Date.now(),
         }
 
         await prisma.gameSession.update({
@@ -257,6 +334,7 @@ export async function POST(req: NextRequest) {
             status: "day",
             phase: nextPhase,
             state: updatedState,
+            actions: { timeline: actions.timeline, snapshots: actions.snapshots },
           },
         })
 
@@ -296,9 +374,23 @@ export async function POST(req: NextRequest) {
         data: {
           phase: "discussion",
           state: { ...gameState, phaseStartedAt: Date.now() },
+          actions: { timeline: actions.timeline, snapshots: actions.snapshots },
         },
       })
+      // Record speech duration for night kill speech
+      if (gameState.speechStartAt) {
+        const durationSec = Math.round((Date.now() - gameState.speechStartAt) / 1000);
+        actions.timeline.push({
+          type: "speech",
+          day: game.dayNumber,
+          speechType: "night_kill",
+          playerId: gameState.nightKilledId,
+          durationSec,
+          timestamp: Date.now(),
+        });
+      }
       return NextResponse.json({ success: true })
+
     }
 
     if (game.phase === "discussion") {
@@ -326,6 +418,19 @@ export async function POST(req: NextRequest) {
 
       const speakersCount = (gameState.speakersCount || 1) + 1
       const currentIndex = ((gameState.currentSpeakerIndex || 0) + 1) % alivePlayers.length
+
+      // When discussion ends, record speech duration
+      if (gameState.speechStartAt) {
+        const durationSec = Math.round((Date.now() - gameState.speechStartAt) / 1000);
+        actions.timeline.push({
+          type: "speech",
+          day: game.dayNumber,
+          speechType: "discussion",
+          playerId: currentSpeaker.userId,
+          durationSec,
+          timestamp: Date.now(),
+        });
+      }
 
       if (speakersCount > alivePlayers.length) {
         if (game.dayNumber === 1) {
@@ -365,7 +470,8 @@ export async function POST(req: NextRequest) {
         await prisma.gameSession.update({
           where: { id: sessionId },
           data: {
-            state: { ...gameState, currentSpeakerIndex: currentIndex, speakersCount, phaseStartedAt: Date.now() },
+            state: { ...gameState, currentSpeakerIndex: currentIndex, speakersCount, phaseStartedAt: Date.now(), speechStartAt: Date.now() },
+            actions: { timeline: actions.timeline, snapshots: actions.snapshots },
           },
         })
         return NextResponse.json({ success: true })
@@ -424,6 +530,33 @@ export async function POST(req: NextRequest) {
       })
 
       const result = resolveVoting(votes)
+      
+      // ---------------- ДОДАНО ТУТ ----------------
+      const expectedVoters = alivePlayers.map(p => p.userId);
+      const voteCount: Record<string, number> = {};
+      
+      noms.forEach((c: string) => voteCount[c] = 0);
+      Object.values(votes).forEach((targetId: any) => {
+        if (voteCount[targetId] !== undefined) {
+          voteCount[targetId]++;
+        }
+      });
+      
+      const didNotVote = expectedVoters.filter(vId => !votes[vId]);
+
+      actions.snapshots.votings.push({
+        day: game.dayNumber,
+        type: "voting",
+        candidates: noms,
+        votes: votes,
+        voteCount: voteCount,
+        didNotVote: didNotVote,
+        eliminatedPlayerId: result.eliminated || null,
+        isTie: result.tie || false,
+        timestamp: Date.now()
+      });
+      // --------------------------------------------
+
       if (!result.tie) {
         if (game.lobby.lastWords) {
           await prisma.gameSession.update({
@@ -432,6 +565,8 @@ export async function POST(req: NextRequest) {
               status: "day",
               phase: "voting_elim_speech",
               state: { ...gameState, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now() },
+              // ДОДАНО РЯДОК НИЖЧЕ:
+              actions: { timeline: actions.timeline, snapshots: actions.snapshots },
             },
           })
         } else {
@@ -443,6 +578,8 @@ export async function POST(req: NextRequest) {
           data: {
             phase: "revote_defense",
             state: { ...gameState, votes: {}, revoteCandidates: result.leaders, nominationSpeakerIndex: 0, phaseStartedAt: Date.now() },
+            // ДОДАНО РЯДОК НИЖЧЕ:
+            actions: { timeline: actions.timeline, snapshots: actions.snapshots },
           },
         })
       }
@@ -492,6 +629,33 @@ export async function POST(req: NextRequest) {
       })
 
       const result = resolveVoting(votes)
+
+      // ---------------- ДОДАНО ТУТ ----------------
+      const expectedVoters = alivePlayers.map(p => p.userId);
+      const voteCount: Record<string, number> = {};
+      
+      revoteCandidates.forEach((c: string) => voteCount[c] = 0);
+      Object.values(votes).forEach((targetId: any) => {
+        if (voteCount[targetId] !== undefined) {
+          voteCount[targetId]++;
+        }
+      });
+      
+      const didNotVote = expectedVoters.filter(vId => !votes[vId]);
+
+      actions.snapshots.votings.push({
+        day: game.dayNumber,
+        type: "revoting", // Зверни увагу: тут фіксовано type "revoting"
+        candidates: revoteCandidates,
+        votes: votes,
+        voteCount: voteCount,
+        didNotVote: didNotVote,
+        eliminatedPlayerId: result.eliminated || null,
+        isTie: result.tie || false,
+        timestamp: Date.now()
+      });
+      // --------------------------------------------
+
       if (!result.tie) {
         if (game.lobby.lastWords) {
           await prisma.gameSession.update({
@@ -500,6 +664,8 @@ export async function POST(req: NextRequest) {
               status: "day",
               phase: "voting_elim_speech",
               state: { ...gameState, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now() },
+              // ДОДАНО РЯДОК НИЖЧЕ:
+              actions: { timeline: actions.timeline, snapshots: actions.snapshots },
             },
           })
         } else {

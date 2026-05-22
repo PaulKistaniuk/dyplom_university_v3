@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   const timeline = Array.isArray(actions.timeline) ? actions.timeline : []
   timeline.push({
     type: "nomination",
-    voterId: currentUserId,
+    nominatorId: currentUserId,
     targetId,
     dayNumber: game.dayNumber,
     timestamp: Date.now(),

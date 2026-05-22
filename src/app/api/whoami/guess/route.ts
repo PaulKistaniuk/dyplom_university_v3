@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
           const isWinner = winners.includes(p.userId)
           
           return {
+            gameId: sessionId,
             userId: p.userId,
             gameType: "whoami",
             result: isWinner ? "win" : "lose",

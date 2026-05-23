@@ -216,15 +216,104 @@ export default function GamePage() {
   if (!state || !state.players) return <div className={styles.container} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Завантаження стану гри...</div>
   if (!me) return <div className={styles.container} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Завантаження гравців...</div>
 
+  // --- ЕКРАН КІНЦЯ ГРИ ---
   if (state.status === "finished") {
+    // Визначаємо переможця: беремо з об'єкта state, або вираховуємо за наявністю живої мафії
+    const winnerTeam = state.winner || state.state?.winner || (state.players?.some((p: any) => p.isAlive && (p.role === "mafia" || p.role === "don")) ? "mafia" : "citizens");
+    const isMafiaWin = winnerTeam === "mafia";
+
     return (
-      <div className={styles.container}>
-        <div style={{ padding: "2rem", textAlign: "center" }}>
-          <h1>Кінець гри</h1>
-          <p>Переможець: TBD</p>
+      <div className={styles.container} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: "2rem" }}>
+        <div style={{ maxWidth: "800px", width: "100%", backgroundColor: "var(--moon-surface, #131b2e)", borderRadius: "16px", border: "1px solid #223154", padding: "2.5rem", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", textAlign: "center" }}>
+          
+          <div style={{ fontSize: "4.5rem", marginBottom: "0.5rem" }}>
+            {isMafiaWin ? "🕶️" : "🎉"}
+          </div>
+          
+          <h1 style={{ fontSize: "2.8rem", color: isMafiaWin ? "var(--role-mafia, #ef4444)" : "var(--role-citizen, #3b82f6)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.5rem" }}>
+            {isMafiaWin ? "Перемога Команди Мафії" : "Перемога Мирного Міста"}
+          </h1>
+          
+          <p style={{ color: "var(--moon-text-dim, #94a3b8)", fontSize: "1.1rem", marginBottom: "2.5rem" }}>
+            Гра успішно завершилась на {state.dayNumber} раунді. Усі секретні карти гравців розкрито:
+          </p>
+
+          {/* Сітка розсекречених гравців */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "1.2rem", textAlign: "left" }}>
+            {state.players.map((p: any, index: number) => {
+              let roleLabel = "";
+              let roleColor = "";
+              
+              switch (p.role) {
+                case "citizen": roleLabel = "Мирний"; roleColor = "var(--role-citizen, #3b82f6)"; break;
+                case "mafia": roleLabel = "Мафія"; roleColor = "var(--role-mafia, #ef4444)"; break;
+                case "don": roleLabel = "Дон 🕶️"; roleColor = "#b91c1c"; break;
+                case "commissar": roleLabel = "Комісар 🔍"; roleColor = "var(--role-commissar, #a855f7)"; break;
+                case "doctor": roleLabel = "Лікар ➕"; roleColor = "var(--role-doctor, #10b981)"; break;
+                default: roleLabel = p.role || "Громадянин"; roleColor = "#94a3b8";
+              }
+
+              return (
+                <div 
+                  key={p.userId} 
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "0.8rem", 
+                    padding: "0.8rem", 
+                    backgroundColor: "var(--moon-surface-light, #1e293b)", 
+                    borderRadius: "12px", 
+                    border: p.isAlive ? `1px solid ${roleColor}50` : "1px solid #334155",
+                    opacity: p.isAlive ? 1 : 0.55,
+                    position: "relative"
+                  }}
+                >
+                  {/* Номер стільця */}
+                  <div style={{ fontSize: "0.85rem", fontWeight: "bold", color: "var(--moon-accent, #64748b)", minWidth: "24px" }}>
+                    №{index + 1}
+                  </div>
+                  
+                  {/* Аватар */}
+                  <img 
+                    src={p.user?.avatarUrl || "/default_user.png"} 
+                    alt="avatar" 
+                    style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover", border: `2px solid ${p.isAlive ? "#10b981" : "#ef4444"}` }} 
+                  />
+                  
+                  {/* Інформація про гравця */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: "700", color: "#f8fafc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.95rem" }}>
+                      {p.user?.username} {p.userId === userId && <span style={{ color: "var(--moon-accent)", fontSize: "0.8rem" }}>(Ви)</span>}
+                    </div>
+                    
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
+                      {/* Роль */}
+                      <span style={{ fontSize: "0.7rem", fontWeight: "800", color: roleColor, backgroundColor: `${roleColor}15`, padding: "2px 6px", borderRadius: "4px", border: `1px solid ${roleColor}30`, textTransform: "uppercase" }}>
+                        {roleLabel}
+                      </span>
+                      {/* Статус живий/мертвий */}
+                      <span style={{ fontSize: "0.75rem" }}>
+                        {p.isAlive ? "🟢 Живий" : "💀 Мертвий"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Кнопка виходу */}
+          <button 
+            onClick={() => window.location.href = "/"} 
+            style={{ marginTop: "3rem", backgroundColor: "var(--moon-surface-light, #223154)", color: "#f8fafc", border: "1px solid #334155", padding: "0.8rem 2.5rem", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "1rem", transition: "all 0.2s" }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#2d3f6d"}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "var(--moon-surface-light, #223154)"}
+          >
+            Повернутися на головну
+          </button>
         </div>
       </div>
-    )
+    );
   }
 
   const getPhaseDetail = () => {

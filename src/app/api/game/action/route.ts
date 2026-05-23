@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import jwt from "jsonwebtoken"
 import { resolveNight } from "@/game-engine/mafia/night"
+import { checkWin } from "@/game-engine/mafia/win" // ← ДОДАНО ІМПОРТ ПЕРЕВІРКИ ПЕРЕМОГИ
 
 export async function POST(req: NextRequest) {
   try {
@@ -73,6 +74,8 @@ export async function POST(req: NextRequest) {
     const checkedPlayers = playerState.checkedPlayers || []
 
     const actions = (game.actions as any) || {}
+    // Переконуємось, що структура snapshots існує
+    actions.snapshots = actions.snapshots || { days: [], nights: [], votings: [] }
     const timeline = Array.isArray(actions.timeline) ? actions.timeline : []
 
     // KILL (mafia + don)
@@ -87,7 +90,7 @@ export async function POST(req: NextRequest) {
 
       gameState.mafiaVotes[player.userId] = targetId
 
-      // пріоритет дна
+      // пріоритет дона
       if (player.role === "don") {
         gameState.donKill = targetId
       }
@@ -187,7 +190,6 @@ export async function POST(req: NextRequest) {
           },
         ]
         gameState.currentNightDonCheck = targetId
-        // don checks don't use resolveNight check target, that is only for Sheriff/Commissar
 
         timeline.push({
           type: "night_action",
@@ -208,7 +210,6 @@ export async function POST(req: NextRequest) {
       }
 
       const lastHeal = gameState.lastHeal
-      const healsUsed = playerState.healsUsed || 0
       const selfHeals = playerState.selfHeals || 0
 
       if (lastHeal === targetId) {
@@ -231,26 +232,24 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // SAVE
+    // Первинне збереження дій у проміжних фазах
     await prisma.gameSession.update({
       where: { id: sessionId },
       data: {
         state: gameState,
         actions: {
-          ...actions,
           timeline,
+          snapshots: actions.snapshots,
         },
       },
     })
 
-    // ДОБАВЛЯЄМО АВТОПЕРЕХІД
-
+    // АВТОПЕРЕХІД МІЖ ФАЗАМИ
     const alivePlayers = game.players.filter(p => (p.state as any)?.isAlive ?? true)
 
     // MAFIA → DON
     if (game.phase === "mafia") {
       const mafia = alivePlayers.filter(p => ["mafia", "don"].includes(p.role || ""))
-
       const allVoted = mafia.every(p => gameState.mafiaVotes?.[p.userId])
 
       if (allVoted) {
@@ -267,7 +266,6 @@ export async function POST(req: NextRequest) {
     // DON → COMMISSAR
     else if (game.phase === "don") {
       const hasDonCheck = !!gameState.currentNightDonCheck
-
       if (hasDonCheck) {
         await prisma.gameSession.update({
           where: { id: sessionId },
@@ -282,7 +280,6 @@ export async function POST(req: NextRequest) {
     // COMMISSAR → DOCTOR
     else if (game.phase === "commissar") {
       const hasCheck = !!gameState.currentNightCommissarCheck
-
       if (hasCheck) {
         await prisma.gameSession.update({
           where: { id: sessionId },
@@ -294,11 +291,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // DOCTOR → DAY
+    // DOCTOR → DAY (ПЕРЕХІД У ДЕНЬ)
     else if (game.phase === "doctor") {
       const hasHeal = !!gameState.heal
       if (hasHeal) {
-        // We use the same complex logic as next/route.ts
         const result = resolveNight(gameState, game.players)
 
         if (result.killedPlayerId) {
@@ -326,7 +322,41 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        // Helper to find first speaker
+        // === ДОДАНO ЗНІМОК СТАНУ НОЧІ (SNAPSHOTS) ===
+        const alivePlayersSnapshot = game.players
+          .filter(p => ((p.state as any)?.isAlive ?? true) && p.userId !== result.killedPlayerId)
+          .map(p => p.userId)
+
+        const deadPlayersSnapshot = game.players
+          .filter(p => !((p.state as any)?.isAlive ?? true) || p.userId === result.killedPlayerId)
+          .map(p => p.userId)
+
+        actions.snapshots.nights.push({
+          night: game.dayNumber,
+          type: "night",
+          alivePlayers: alivePlayersSnapshot,
+          deadPlayers: deadPlayersSnapshot,
+          mafiaVotes: gameState.mafiaVotes || {},
+          finalKillTarget: gameState.donKill || null,
+          doctorHeal: gameState.heal || null,
+          savedPlayerId:
+            gameState.heal && gameState.heal === gameState.donKill
+              ? gameState.heal
+              : null,
+          donCheck: gameState.currentNightDonCheck ? { 
+            targetId: gameState.currentNightDonCheck, 
+            result: (gameState.donChecks && gameState.donChecks.length > 0) ? gameState.donChecks[gameState.donChecks.length - 1].result : null 
+          } : {},
+          commissarCheck: gameState.currentNightCommissarCheck ? { 
+            targetId: gameState.currentNightCommissarCheck, 
+            result: (gameState.commissarChecks && gameState.commissarChecks.length > 0) ? gameState.commissarChecks[gameState.commissarChecks.length - 1].result : null 
+          } : {},
+          killedPlayerId: result.killedPlayerId,
+          timestamp: Date.now(),
+        })
+        // ============================================
+
+        // Розрахунок першого спікера
         const isAliveNow = (p: any) => ((p.state as any)?.isAlive ?? true) && p.userId !== result.killedPlayerId
         const alivePlayersTemp = game.players.filter(isAliveNow)
         let firstSpeaker = 0
@@ -341,7 +371,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Get lobby for lastWords
         const lobby = await prisma.lobby.findUnique({ where: { id: game.lobbyId } })
         const nextPhase = (result.killedPlayerId && lobby?.lastWords) ? "night_kill_speech" : "discussion"
 
@@ -358,6 +387,7 @@ export async function POST(req: NextRequest) {
               currentSpeakerIndex: firstSpeaker,
               speakersCount: 1,
               phaseStartedAt: Date.now(),
+              speechStartAt: Date.now(), // ← ДОДАНО ДЛЯ ФІКСУ ТАЙМЕРУ ПРОМОВ
               heal: null,
               currentNightDonCheck: null,
               currentNightCommissarCheck: null,
@@ -368,14 +398,41 @@ export async function POST(req: NextRequest) {
               nominationSpeakerIndex: 0,
               revoteCandidates: [],
             },
+            // Записуємо оновлені snapshot логі в базу даних!
+            actions: { timeline, snapshots: actions.snapshots },
           },
         })
+
+        // === ДОДАНO ПЕРЕВІРКУ НА ПЕРЕМОГУ ПІСЛЯ НОЧІ ===
+        const afterNight = await prisma.gameSession.findUnique({
+          where: { id: sessionId }, include: { players: true },
+        })
+        const nightWinner = checkWin(afterNight!.players)
+        if (nightWinner) {
+          await prisma.gameSession.update({ where: { id: sessionId }, data: { status: "finished" } })
+          await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
+
+          const resultsData = afterNight!.players.map((p) => {
+            const isMafiaTeam = p.role === "mafia" || p.role === "don";
+            const isWin = (nightWinner === "mafia" && isMafiaTeam) || (nightWinner === "citizens" && !isMafiaTeam);
+            return {
+              gameId: sessionId,
+              userId: p.userId,
+              gameType: "mafia",
+              result: isWin ? "win" : "lose",
+              stats: { role: p.role },
+            };
+          });
+          await prisma.gameResult.createMany({ data: resultsData });
+        }
+        // ==============================================
       }
     }
 
     return NextResponse.json({ success: true })
   }
   catch (e) {
+    console.error(e)
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }

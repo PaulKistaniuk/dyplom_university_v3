@@ -166,8 +166,8 @@ export default function StatsPage() {
                     {game.result === "win" ? "Перемога" : "Поразка"}
                   </span>
                 </div>
-                <div style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
-                  {new Date(game.createdAt).toLocaleDateString()} • {game.stats?.totalPlayers || game.stats?.alivePlayers?.length || 0} гравців
+                <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+                  Учасників: {game.stats?.totalPlayers || game.stats?.players?.length || (game.stats?.playerMap ? Object.keys(game.stats.playerMap).length : 0)}
                 </div>
               </div>
             ))
@@ -295,72 +295,77 @@ export default function StatsPage() {
 }
 
 // ==========================================
-// НАДІЙНИЙ КОМПОНЕНТ СТАТИСТИКИ МАФІЇ (БЕЗ TS ПОМИЛОК)
+// НОВИЙ КОМПОНЕНТ СТАТИСТИКИ МАФІЇ (АДАПТОВАНИЙ ДО БД)
 // ==========================================
 function MafiaDashboard({ game }: { game: any }) {
-  // Дані можуть лежати прямо в game або всередині game.stats/game.actions
   const mafiaData = game.stats?.timeline ? game.stats : game;
   const timeline = mafiaData.timeline || [];
   const snapshots = mafiaData.snapshots || { days: [], nights: [], votings: [] };
   
-  // Мапа користувачів для читабельних імен
   const playerMap = mafiaData.playerMap || {};
-  const getPlayerName = (id: string) => playerMap[id] || `Гравець #${id.slice(0, 4)}`;
+  const getPlayerName = (id: string) => playerMap[id] || `Гравець #${id?.slice(0, 4) || '?'}`;
 
-  // Визначаємо команду переможців
-  const winnerTeam = mafiaData.winnerTeam || (game.result === "win" ? "Мирні Гравці / ШЕРИФ" : "Мафія");
-
-  // Генеруємо список вкладок динамічно
-  const [activeTab, setActiveTab] = useState("general");
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-
-  const tabs = [{ id: "general", label: "Загальна" }];
-  const totalNights = snapshots.nights?.length || 0;
-  const totalDays = snapshots.days?.length || 0;
-  const maxCycles = Math.max(totalNights, totalDays);
-
-  for (let i = 1; i <= maxCycles; i++) {
-    if (snapshots.nights?.some((n: any) => n.night === i)) {
-      tabs.push({ id: `night_${i}`, label: `Ніч ${i}` });
-    }
-    if (snapshots.days?.some((d: any) => d.day === i)) {
-      tabs.push({ id: `day_${i}`, label: `День ${i}` });
-    }
-  }
-
-  // Отримуємо чистий список гравців із бази даних
+  const viewerId = game.userId; 
   const dbPlayers = mafiaData.players || [];
 
-  // Якщо база повернула масив, використовуємо порядок розсадки (userId), інакше робимо фолбек на унікальний сет із логів
-  const allSessionPlayers: string[] = dbPlayers.length > 0
-    ? dbPlayers.map((p: any) => p.userId)
-    : (Array.from(new Set([
-        ...(snapshots.days?.[0]?.alivePlayers || []),
-        ...(snapshots.nights?.[0]?.alivePlayers || []),
-        ...timeline.filter((t: any) => t.playerId).map((t: any) => t.playerId)
-      ])) as string[]);
-
-  // Повертає роль безпосередньо з бази даних, або робить фолбек якщо гра стара
   const getPlayerRole = (id: string) => {
     const dbPlayer = dbPlayers.find((p: any) => p.userId === id);
     if (dbPlayer?.role) return dbPlayer.role;
-
     const playerRoles = mafiaData.playerRoles || {}; 
     if (playerRoles[id]) return playerRoles[id];
-    
-    if (timeline.some((t: any) => t.action === "kill_vote" && t.userId === id)) return "Мафія / Дон";
-    if (snapshots.nights?.some((n: any) => n.commissarCheck?.playerId === id)) return "Комісар";
     return "Мирний Житель";
   };
 
-  // Повертає номер стільця гравця
   const getPlayerNumber = (id: string) => {
     const dbPlayer = dbPlayers.find((p: any) => p.userId === id);
     return dbPlayer ? dbPlayer.number : null;
   };
 
-  // Поточний вибраний гравець для кабінету аналітики
-  const currentSelectedPlayer = dbPlayers.find((p: any) => p.userId === selectedPlayerId);
+  const winnerTeam = mafiaData.winnerTeam || (game.result === "win" ? "Мирні Гравці / ШЕРИФ" : "Мафія");
+
+  // Збираємо кількість днів на основі snapshots
+  const maxDay = Math.max(...(snapshots.days || []).map((d: any) => d.day), 1);
+
+  const [activeTab, setActiveTab] = useState("general");
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>('GENERAL_LOG');
+
+  const tabs = [{ id: "general", label: "Загальна" }];
+  
+  // Правильне формування вкладок: День 1 -> Ніч 1 -> День 2 -> Ніч 2...
+  for (let i = 1; i <= maxDay; i++) {
+    tabs.push({ id: `day_${i}`, label: `День ${i}` });
+    
+    // Якщо є нічні дії, які передують наступному дню (dayNumber: i + 1), створюємо вкладку Ночі
+    if (timeline.some((t: any) => t.type === 'night_action' && t.dayNumber === i + 1)) {
+      tabs.push({ id: `night_${i}`, label: `Ніч ${i+1}` });
+    }
+  }
+
+  const allSessionPlayers: string[] = dbPlayers.length > 0
+    ? dbPlayers.map((p: any) => p.userId)
+    : Object.keys(playerMap);
+
+  const getRolePlayers = (roleKeyword: string) => dbPlayers.filter((p: any) => p.role?.toLowerCase().includes(roleKeyword));
+  const hasRole = (roleKeyword: string) => getRolePlayers(roleKeyword).length > 0;
+  
+  const mafiaTeam = dbPlayers.filter((p: any) => {
+    const r = p.role?.toLowerCase() || "";
+    return r.includes("мафія") || r.includes("дон") || r === "мафія" || r === "дон";
+  });
+  const donPlayer = getRolePlayers("дон")[0];
+  const docPlayer = getRolePlayers("лікар")[0] || getRolePlayers("доктор")[0];
+  const comPlayer = getRolePlayers("комісар")[0] || getRolePlayers("шериф")[0];
+
+  // Точне визначення смерті
+  const getDeathInfo = (pid: string) => {
+    const votingExile = snapshots.votings?.find((v: any) => v.eliminatedPlayerId === pid);
+    if (votingExile) return `Вигнаний на голосуванні в День ${votingExile.day}`;
+
+    const deathDay = snapshots.days?.find((d: any) => d.deadPlayers?.includes(pid));
+    // Якщо гравець є в мертвих Дня Х, значить він помер у Ніч Х-1
+    if (deathDay) return `Вбитий мафією в Ніч ${deathDay.day - 1}`;
+    return null;
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -377,7 +382,7 @@ function MafiaDashboard({ game }: { game: any }) {
             }}
             onClick={() => {
               setActiveTab(tab.id);
-              setSelectedPlayerId(null);
+              setSelectedPlayerId(tab.id.startsWith("day_") ? 'GENERAL_LOG' : null);
             }}
           >
             {tab.label}
@@ -385,7 +390,6 @@ function MafiaDashboard({ game }: { game: any }) {
         ))}
       </div>
 
-      {/* ВМІСТ ВКЛАДОК */}
       <div style={{ flex: 1, overflow: "hidden", marginTop: "1rem" }}>
         
         {/* === ЗАГАЛЬНА ВКЛАДКА === */}
@@ -396,15 +400,9 @@ function MafiaDashboard({ game }: { game: any }) {
             </div>
             
             <div style={{ display: "flex", gap: "1.5rem", flex: 1, overflow: "hidden", marginTop: "1rem" }}>
-              {/* Лівий блок (60%) — Картки гравців у порядку стільців */}
               <div style={{ flex: "0 0 60%", overflowY: "auto", paddingRight: "4px" }}>
                 <h3 style={styles.subTitle}>🎭 Ролі учасників сесії</h3>
                 <div style={mafiaStyles.playerCardsGrid}>
-                  {/* ФІКС ТУТ: явно типізовано (pid: string) */}
-                  {/* Тимчасовий сирий вивід даних в один рядок для дебагу */}
-                  <div style={{ background: "#111", color: "#00ff00", padding: "10px", fontSize: "11px", wordBreak: "break-all", whiteSpace: "nowrap", overflowX: "auto" }}>
-                    {JSON.stringify(game)}
-                  </div>
                   {allSessionPlayers.map((pid: string) => {
                     const role = getPlayerRole(pid);
                     const isMafia = role.toLowerCase().includes("мафія") || role.toLowerCase().includes("дон");
@@ -418,12 +416,7 @@ function MafiaDashboard({ game }: { game: any }) {
                           </span>
                           {pid === game.userId && <span style={mafiaStyles.youBadge}>ВИ</span>}
                         </div>
-                        <div style={{ 
-                          marginTop: "8px", 
-                          fontSize: "0.85rem", 
-                          fontWeight: "600",
-                          color: isMafia ? "#ef4444" : "#38bdf8"
-                        }}>
+                        <div style={{ marginTop: "8px", fontSize: "0.85rem", fontWeight: "600", color: isMafia ? "#ef4444" : "#38bdf8" }}>
                           🕵️‍♂️ {role}
                         </div>
                       </div>
@@ -432,23 +425,39 @@ function MafiaDashboard({ game }: { game: any }) {
                 </div>
               </div>
 
-              {/* Правий блок (40%) — Логи гри */}
+              {/* Універсальний лог подій */}
               <div style={{ flex: "1", display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 <h3 style={styles.subTitle}>📜 Повний лог подій</h3>
                 <div style={mafiaStyles.logBox}>
-                  {timeline.map((event: any, idx: number) => (
-                    <div key={idx} style={mafiaStyles.logEntry}>
-                      <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
-                        [{event.day ? `День ${event.day}` : `Ніч ${event.dayNumber || '?'}`}]
-                      </span>
-                      {event.type === "speech" && (
-                        <span> 🗣️ <b>{getPlayerName(event.playerId)}</b> тримав промову ({event.speechType === "discussion" ? "обговорення" : "захист"}) тривалістю <b>{event.durationSec}с</b></span>
-                      )}
-                      {event.type === "night_action" && event.action === "kill_vote" && (
-                        <span> 🔫  Мафіозі <b>{getPlayerName(event.userId)}</b> проголосував на ліквідацію <b>{getPlayerName(event.targetId)}</b></span>
-                      )}
-                    </div>
-                  ))}
+                  {timeline.map((event: any, idx: number) => {
+                    // Коригуємо нумерацію: нічні дії, що мають dayNumber X, насправді належать до Ночі X-1
+                    const isNight = event.type === 'night_action';
+                    const cycleNum = isNight ? (event.dayNumber - 1) : (event.day || event.dayNumber);
+                    const prefix = isNight ? `[Ніч ${cycleNum}]` : `[День ${cycleNum}]`;
+                    
+                    let content = null;
+                    if (event.type === 'speech') {
+                       const label = event.speechType === 'discussion' ? 'обговорення' : (event.speechType === 'defense' ? 'захист' : 'перестрілка');
+                       content = <span>🗣️ <b>{getPlayerName(event.playerId)}</b> тримав промову ({label}) тривалістю <b>{event.durationSec}с</b></span>;
+                    } else if (event.type === 'night_action') {
+                       if (event.action === 'kill_vote') content = <span>🔫 <b>{getPlayerName(event.userId)}</b> голосував на ліквідацію <b>{getPlayerName(event.targetId)}</b></span>;
+                       else if (event.action === 'heal') content = <span>🩺 <b>{getPlayerName(event.userId)}</b> лікував <b>{getPlayerName(event.targetId)}</b></span>;
+                       else if (event.action === 'don_check') content = <span>🕶️ <b>{getPlayerName(event.userId)}</b> перевіряв <b>{getPlayerName(event.targetId)}</b></span>;
+                       else if (event.action === 'check') content = <span>🛡️ <b>{getPlayerName(event.userId)}</b> перевіряв <b>{getPlayerName(event.targetId)}</b></span>;
+                    } else if (event.type === 'nomination') {
+                       content = <span>👉 <b>{getPlayerName(event.nominatorId)}</b> виставив на голосування <b>{getPlayerName(event.targetId)}</b></span>;
+                    } else if (event.type === 'vote') {
+                       content = <span>🗳️ <b>{getPlayerName(event.voterId)}</b> голосував проти <b>{getPlayerName(event.targetId)}</b></span>;
+                    }
+
+                    if (!content) return null;
+                    return (
+                      <div key={idx} style={mafiaStyles.logEntry}>
+                        <span style={{ color: "#64748b", fontSize: "0.75rem" }}>{prefix}</span>
+                        {" "}{content}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -459,51 +468,104 @@ function MafiaDashboard({ game }: { game: any }) {
         {activeTab.startsWith("day_") && (() => {
           const dayNum = parseInt(activeTab.split("_")[1]);
           const daySnapshot = snapshots.days?.find((d: any) => d.day === dayNum) || {};
-          const prevNightSnapshot = snapshots.nights?.find((n: any) => n.night === dayNum) || {};
           
+          // Для дня Х дістаємо події Ночі Х-1 (які в базі мають dayNumber === dayNum)
+          const prevNightActions = timeline.filter((t: any) => t.type === 'night_action' && t.dayNumber === dayNum);
+          
+          // Визначаємо жертву ночі
+          const prevDayDead = snapshots.days?.find((d: any) => d.day === dayNum - 1)?.deadPlayers || [];
+          const todayDead = daySnapshot.deadPlayers || [];
+          const prevDayExiled = snapshots.votings?.filter((v: any) => v.day === dayNum - 1).map((v: any) => v.eliminatedPlayerId).filter(Boolean) || [];
+          const nightVictims = todayDead.filter((pid: string) => !prevDayDead.includes(pid) && !prevDayExiled.includes(pid));
+          const nightVictim = nightVictims.length > 0 ? nightVictims[0] : null;
+
+          const docAction = prevNightActions.find((t: any) => t.action === 'heal');
+          const donAction = prevNightActions.find((t: any) => t.action === 'don_check');
+          const comAction = prevNightActions.find((t: any) => t.action === 'check');
+
           const aliveList = daySnapshot.alivePlayers || [];
           const deadList = daySnapshot.deadPlayers || [];
 
+          // Голосування та переголосування
+          const dayVotings = snapshots.votings?.filter((v: any) => v.day === dayNum) || [];
+          const mainVoting = dayVotings.find((v: any) => v.type === "voting");
+          const revoting = dayVotings.find((v: any) => v.type === "revoting");
+          const lastVoting = dayVotings.length > 0 ? dayVotings[dayVotings.length - 1] : null;
+
+          // Персональні дані вибраного гравця
           const selectedPlayerSpeeches = timeline.filter((t: any) => t.day === dayNum && t.playerId === selectedPlayerId && t.type === "speech");
           const mainSpeech = selectedPlayerSpeeches.find((s: any) => s.speechType === "discussion");
           const defenseSpeech = selectedPlayerSpeeches.find((s: any) => s.speechType === "defense");
           const reDefenseSpeech = selectedPlayerSpeeches.find((s: any) => s.speechType === "re_discussion" || s.speechType === "justification_again");
+          
+          const nominationsMade = timeline.find((t: any) => (t.dayNumber === dayNum || t.day === dayNum) && t.type === "nomination" && t.nominatorId === selectedPlayerId);
 
-          const nominationsMade = daySnapshot.nominations?.[selectedPlayerId || ""] || null;
+          const playerVote = mainVoting?.votes?.[selectedPlayerId || ""];
+          const playerRevote = revoting?.votes?.[selectedPlayerId || ""];
+
+          const deathInfo = selectedPlayerId ? getDeathInfo(selectedPlayerId) : null;
+          const isSelectedDeadToday = deathInfo && !aliveList.includes(selectedPlayerId);
 
           return (
             <div style={{ display: "flex", gap: "1.5rem", height: "100%", overflow: "hidden" }}>
-              {/* ЛІВА ЧАСТИНА: Списки гравців за стільцями */}
+              {/* ЛІВА ЧАСТИНА: Списки гравців */}
               <div style={{ flex: "0 0 320px", display: "flex", flexDirection: "column", gap: "1rem" }}>
                 
-                <div style={mafiaStyles.nightSummaryCard}>
-                  <h4 style={{ margin: "0 0 8px 0", color: "#fbbf24", fontSize: "0.9rem", textTransform: "uppercase" }}>🌃 Підсумки ночі {dayNum}</h4>
-                  <div style={mafiaStyles.summaryItem}>
-                    <span>Жертва мафії:</span> 
-                    <b>{prevNightSnapshot.killedPlayerId ? getPlayerName(prevNightSnapshot.killedPlayerId) : "Ніхто (Промах)"}</b>
+                {dayNum === 1 ? (
+                  <div style={{...mafiaStyles.nightSummaryCard, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '120px'}}>
+                    <b style={{ color: "#94a3b8", fontSize: "1rem" }}>🌅 Вночі ще не було дій</b>
                   </div>
-                  <div style={mafiaStyles.summaryItem}>
-                    <span>Візит лікаря:</span> 
-                    <b>{prevNightSnapshot.savedPlayerId ? getPlayerName(prevNightSnapshot.savedPlayerId) : "Не було лікування"}</b>
+                ) : (
+                  <div style={mafiaStyles.nightSummaryCard}>
+                    <h4 style={{ margin: "0 0 8px 0", color: "#fbbf24", fontSize: "0.9rem", textTransform: "uppercase" }}>🌃 Підсумки ночі {dayNum - 1}</h4>
+                    <div style={mafiaStyles.summaryItem}>
+                      <span>Жертва мафії:</span> 
+                      <b>{nightVictim ? getPlayerName(nightVictim) : "Ніхто (Промах / Сав)"}</b>
+                    </div>
+                    {hasRole("лікар") && (
+                      <div style={mafiaStyles.summaryItem}>
+                        <span>Візит лікаря:</span> 
+                        <b>{docAction ? getPlayerName(docAction.targetId) : "Пропустив хід"}</b>
+                      </div>
+                    )}
+                    {hasRole("дон") && (
+                      <div style={mafiaStyles.summaryItem}>
+                        <span>Перевірка Дона:</span> 
+                        <b>{donAction ? `${getPlayerName(donAction.targetId)} (${donAction.result === 'commissar' ? 'Шериф!' : 'Ні'})` : "Пропустив хід"}</b>
+                      </div>
+                    )}
+                    {hasRole("комісар") && (
+                      <div style={mafiaStyles.summaryItem}>
+                        <span>Перевірка Комісара:</span> 
+                        <b>{comAction ? `${getPlayerName(comAction.targetId)} (${comAction.result === 'mafia' ? 'Мафія!' : 'Мирний'})` : "Пропустив хід"}</b>
+                      </div>
+                    )}
                   </div>
-                  <div style={mafiaStyles.summaryItem}>
-                    <span>Перевірка Дона:</span> 
-                    <b>{prevNightSnapshot.donCheck?.targetId ? `${getPlayerName(prevNightSnapshot.donCheck.targetId)} (${prevNightSnapshot.donCheck.result ? 'Шериф!' : 'Ні'})` : "Не перевіряв"}</b>
-                  </div>
-                  <div style={mafiaStyles.summaryItem}>
-                    <span>Перевірка Комісара:</span> 
-                    <b>{prevNightSnapshot.commissarCheck?.targetId ? `${getPlayerName(prevNightSnapshot.commissarCheck.targetId)} (${prevNightSnapshot.commissarCheck.result ? 'Мафія!' : 'Мирний'})` : "Не перевіряв"}</b>
-                  </div>
-                </div>
+                )}
 
                 <div style={{ ...styles.card, flex: 1, display: "flex", flexDirection: "column" }}>
+                  <button 
+                    style={{
+                      ...mafiaStyles.tabButton, 
+                      width: "100%", 
+                      marginBottom: "10px", 
+                      backgroundColor: selectedPlayerId === 'GENERAL_LOG' ? "rgba(56, 189, 248, 0.1)" : "#1e293b",
+                      borderWidth: "1px",
+                      borderStyle: "solid",
+                      borderColor: selectedPlayerId === 'GENERAL_LOG' ? "#38bdf8" : "#334155" // Фікс React помилки змішування стилів
+                    }}
+                    onClick={() => setSelectedPlayerId('GENERAL_LOG')}
+                  >
+                    📖 Загальний журнал подій
+                  </button>
+
                   <h4 style={{ margin: "0 0 10px 0", color: "#94a3b8" }}>Гравці на цей день</h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px", overflowY: "auto" }}>
-                    {/* ФІКС ТУТ: явно типізовано (pid: string) */}
                     {allSessionPlayers.map((pid: string) => {
                       const isAlive = aliveList.includes(pid);
                       const isJustDead = deadList.includes(pid);
                       const seatNumber = getPlayerNumber(pid);
+                      const role = getPlayerRole(pid);
 
                       return (
                         <div
@@ -511,13 +573,17 @@ function MafiaDashboard({ game }: { game: any }) {
                           style={{
                             ...mafiaStyles.selectablePlayerRow,
                             borderColor: selectedPlayerId === pid ? "#38bdf8" : "transparent",
-                            backgroundColor: selectedPlayerId === pid ? "rgba(56, 189, 248, 0.1)" : "rgba(30, 41, 59, 0.4)"
+                            backgroundColor: selectedPlayerId === pid ? "rgba(56, 189, 248, 0.1)" : "rgba(30, 41, 59, 0.4)",
+                            opacity: isAlive ? 1 : 0.6
                           }}
                           onClick={() => setSelectedPlayerId(pid)}
                         >
-                          <span style={{ textDecoration: !isAlive ? "line-through" : "none", color: isAlive ? "#f8fafc" : "#64748b" }}>
-                            {seatNumber !== null ? `${seatNumber}. ` : ""}{getPlayerName(pid)}
-                          </span>
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            <span style={{ textDecoration: !isAlive ? "line-through" : "none", color: isAlive ? "#f8fafc" : "#64748b" }}>
+                              {seatNumber !== null ? `${seatNumber}. ` : ""}{getPlayerName(pid)}
+                            </span>
+                            <span style={{ fontSize: "0.65rem", color: "#94a3b8" }}>{role}</span>
+                          </div>
                           <span style={{
                             fontSize: "0.75rem",
                             padding: "2px 6px",
@@ -526,7 +592,7 @@ function MafiaDashboard({ game }: { game: any }) {
                             backgroundColor: isAlive ? "rgba(34, 197, 94, 0.1)" : "rgba(239, 68, 68, 0.1)",
                             color: isAlive ? "#22c55e" : "#ef4444"
                           }}>
-                            {isAlive ? "Живий" : isJustDead ? "Вбитий вночі" : "Мертвий"}
+                            {isAlive ? "Живий" : isJustDead ? "Помер" : "Мертвий"}
                           </span>
                         </div>
                       );
@@ -535,81 +601,146 @@ function MafiaDashboard({ game }: { game: any }) {
                 </div>
               </div>
 
-              {/* ПРАВА ЧАСТИНА: Персональний кабінет */}
+              {/* ПРАВА ЧАСТИНА */}
               <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                {selectedPlayerId ? (
+                
+                {/* ЗАГАЛЬНИЙ ЖУРНАЛ */}
+                {selectedPlayerId === 'GENERAL_LOG' && (
+                  <div style={{...mafiaStyles.personalInvestigationContainer, overflowY: "auto"}}>
+                    <h3 style={{ margin: "0 0 1rem 0", color: "#38bdf8" }}>📖 Журнал подій: День {dayNum}</h3>
+                    
+                    <h4 style={{ color: "#fbbf24", marginBottom: "8px" }}>🗣️ Дискусії та номінації</h4>
+                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155" }}>
+                      {timeline.filter((t:any) => t.day === dayNum && t.type === "speech" && t.speechType === "discussion").map((s:any, idx:number) => {
+                        const nom = timeline.find((t:any) => (t.dayNumber === dayNum || t.day === dayNum) && t.type === "nomination" && t.nominatorId === s.playerId);
+                        return (
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #1e293b" }}>
+                            <span style={{ width: "30%" }}>{getPlayerName(s.playerId)}</span>
+                            <span style={{ width: "20%", color: "#94a3b8" }}>{s.durationSec} сек</span>
+                            <span style={{ width: "50%", textAlign: "right", color: nom ? "#ef4444" : "#64748b" }}>
+                              {nom ? `Виставив: ${getPlayerName(nom.targetId)}` : "Не виставляв"}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {timeline.some((t:any) => t.day === dayNum && t.type === "speech" && t.speechType === "defense") && (
+                      <>
+                        <h4 style={{ color: "#a855f7", marginBottom: "8px" }}>🛡️ Промови виправдання</h4>
+                        <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155" }}>
+                          {timeline.filter((t:any) => t.day === dayNum && t.type === "speech" && t.speechType === "defense").map((s:any, idx:number) => (
+                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #1e293b" }}>
+                              <span>{getPlayerName(s.playerId)}</span>
+                              <span style={{ color: "#94a3b8" }}>{s.durationSec} сек</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {mainVoting && (
+                      <>
+                        <h4 style={{ color: "#ef4444", marginBottom: "8px" }}>🗳️ Основне голосування</h4>
+                        <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                          {Object.entries(mainVoting.votes || {}).map(([voterId, targetId]: [string, any]) => (
+                            <div key={voterId} style={{ fontSize: "0.85rem" }}>
+                              <b>{getPlayerName(voterId)}</b> ➡️ {getPlayerName(targetId)}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {revoting && (
+                      <>
+                        <h4 style={{ color: "#ef4444", marginBottom: "8px" }}>⚖️ Переголосування (Розпил)</h4>
+                        <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                          {Object.entries(revoting.votes || {}).map(([voterId, targetId]: [string, any]) => (
+                            <div key={voterId} style={{ fontSize: "0.85rem" }}>
+                              <b>{getPlayerName(voterId)}</b> ➡️ {getPlayerName(targetId)}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* ПІДСУМОК ДНЯ: ХТО ВИГНАНИЙ */}
+                    {lastVoting && (
+                      <div style={{ marginTop: "1rem", padding: "12px", backgroundColor: lastVoting.eliminatedPlayerId ? "rgba(239, 68, 68, 0.1)" : "rgba(56, 189, 248, 0.1)", borderRadius: "8px", border: `1px solid ${lastVoting.eliminatedPlayerId ? "#ef4444" : "#38bdf8"}` }}>
+                        <h4 style={{ margin: "0 0 8px 0", color: lastVoting.eliminatedPlayerId ? "#ef4444" : "#38bdf8" }}>🏁 Підсумок дня</h4>
+                        <b>{lastVoting.eliminatedPlayerId ? `Місто вигнало гравця: ${getPlayerName(lastVoting.eliminatedPlayerId)}` : "Рішення не прийнято. Нікого не вигнано."}</b>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+                {/* КАБІНЕТ МЕРТВОГО ГРАВЦЯ */}
+                {selectedPlayerId && selectedPlayerId !== 'GENERAL_LOG' && isSelectedDeadToday && (
+                  <div style={{...mafiaStyles.personalInvestigationContainer, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column"}}>
+                    <div style={{ fontSize: "3rem" }}>💀</div>
+                    <h3 style={{ margin: "10px 0", color: "#ef4444" }}>Гравець мертвий</h3>
+                    <p style={{ color: "#94a3b8" }}>{deathInfo}</p>
+                  </div>
+                )}
+
+                {/* ПЕРСОНАЛЬНИЙ КАБІНЕТ ЖИВОГО ГРАВЦЯ */}
+                {selectedPlayerId && selectedPlayerId !== 'GENERAL_LOG' && !isSelectedDeadToday && (
                   <div style={mafiaStyles.personalInvestigationContainer}>
                     <h3 style={{ margin: "0 0 1rem 0", color: "#38bdf8" }}>
-                      📊 Персональний кабінет аналітики: <span style={{ color: "#fff" }}>{getPlayerName(selectedPlayerId)}</span>
+                      📊 Аналітика: <span style={{ color: "#fff" }}>{getPlayerName(selectedPlayerId)}</span>
                     </h3>
                     
                     <div style={mafiaStyles.investigationGrid}>
                       <div style={mafiaStyles.investigationItem}>
                         <span style={mafiaStyles.investigationLabel}>Основна промова (Discussion)</span>
-                        <b style={{ fontSize: "1.2rem" }}>{mainSpeech ? `${mainSpeech.durationSec} секунд` : "Не виступав / Був мертвий"}</b>
+                        <b style={{ fontSize: "1.2rem" }}>{mainSpeech ? `${mainSpeech.durationSec} секунд` : "Не виступав"}</b>
                       </div>
 
-                      <div style={mafiaStyles.investigationItem}>
-                        <span style={mafiaStyles.investigationLabel}>Виставлення на голосування (Номінація)</span>
-                        <b>{nominationsMade ? `Виставив гравця: ${getPlayerName(nominationsMade)}` : "Нікого не виставив"}</b>
-                      </div>
+                      {dayNum > 1 && (
+                        <div style={mafiaStyles.investigationItem}>
+                          <span style={mafiaStyles.investigationLabel}>Номінація</span>
+                          <b>{nominationsMade ? `Виставив: ${getPlayerName(nominationsMade.targetId)}` : "Нікого не виставив"}</b>
+                        </div>
+                      )}
 
-                      <div style={mafiaStyles.investigationItem}>
-                        <span style={mafiaStyles.investigationLabel}>Промова виправдання (Захист)</span>
-                        <b style={{ color: defenseSpeech ? "#fbbf24" : "#94a3b8" }}>
-                          {defenseSpeech ? `${defenseSpeech.durationSec} секунд` : "Не виставлявся на голосування"}
-                        </b>
-                      </div>
+                      {defenseSpeech && (
+                        <div style={mafiaStyles.investigationItem}>
+                          <span style={mafiaStyles.investigationLabel}>Промова виправдання (Захист)</span>
+                          <b style={{ color: "#fbbf24" }}>{defenseSpeech.durationSec} секунд</b>
+                        </div>
+                      )}
 
-                      <div style={mafiaStyles.investigationItem}>
-                        <span style={mafiaStyles.investigationLabel}>Повторне виправдання (Перестрілка)</span>
-                        <b style={{ color: reDefenseSpeech ? "#fbbf24" : "#94a3b8" }}>
-                          {reDefenseSpeech ? `${reDefenseSpeech.durationSec} секунд` : "Не брав участі"}
-                        </b>
-                      </div>
+                      {reDefenseSpeech && (
+                        <div style={mafiaStyles.investigationItem}>
+                          <span style={mafiaStyles.investigationLabel}>Повторне виправдання (Перестрілка)</span>
+                          <b style={{ color: "#fbbf24" }}>{reDefenseSpeech.durationSec} секунд</b>
+                        </div>
+                      )}
                     </div>
 
-                    <div style={{ marginTop: "1.5rem" }}>
-                      <h4 style={{ margin: "0 0 8px 0", color: "#94a3b8" }}>🗳️ Голосування гравця в цей день</h4>
-                      <div style={{ backgroundColor: "#0f172a", padding: "1rem", borderRadius: "10px", border: "1px solid #334155" }}>
-                        <div style={mafiaStyles.summaryItem}>
-                          <span>Основне голосування:</span>
-                          <b>{daySnapshot.nominations?.[selectedPlayerId] ? `Проголосував проти ${getPlayerName(daySnapshot.nominations[selectedPlayerId])}` : "Голос не зафіксовано / Не голосував"}</b>
-                        </div>
-                        <div style={{ ...mafiaStyles.summaryItem, marginTop: "8px", borderTop: "1px solid #1e293b", paddingTop: "8px" }}>
-                          <span>Повторне голосування:</span>
-                          <b style={{ color: "#64748b" }}>Дані відсутні (одностайне рішення)</b>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ДИНАМІЧНИЙ ВИВІД ОЦІНОК ТА ML-МЕТРИК З ТАБЛИЦІ GAMEPLAYER */}
-                    {currentSelectedPlayer && (Object.keys(currentSelectedPlayer.state).length > 0 || Object.keys(currentSelectedPlayer.personal).length > 0) && (
+                    {mainVoting && mainVoting.candidates?.length > 1 && (
                       <div style={{ marginTop: "1.5rem" }}>
-                        <h4 style={{ margin: "0 0 8px 0", color: "#a855f7" }}>🧠 Системні метрики гравця (БД & ML)</h4>
-                        <div style={{ backgroundColor: "#0f172a", padding: "1rem", borderRadius: "10px", border: "1px solid #334155", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                          {currentSelectedPlayer.state?.fouls !== undefined && (
-                            <div style={mafiaStyles.summaryItem}>
-                              <span>Кількість фолів:</span>
-                              <b style={{ color: currentSelectedPlayer.state.fouls >= 3 ? "#ef4444" : "#fff" }}>{currentSelectedPlayer.state.fouls}</b>
-                            </div>
-                          )}
-                          {currentSelectedPlayer.personal?.mlScore !== undefined && (
-                            <div style={mafiaStyles.summaryItem}>
-                              <span>ML-Оцінка гри:</span>
-                              <b style={{ color: "#22c55e" }}>{currentSelectedPlayer.personal.mlScore}</b>
+                        <h4 style={{ margin: "0 0 8px 0", color: "#94a3b8" }}>🗳️ Голосування гравця</h4>
+                        <div style={{ backgroundColor: "#0f172a", padding: "1rem", borderRadius: "10px", border: "1px solid #334155" }}>
+                          <div style={mafiaStyles.summaryItem}>
+                            <span>Основне голосування:</span>
+                            <b>
+                              {playerVote 
+                                ? `Проголосував проти ${getPlayerName(playerVote)}` 
+                                : `Голос в ${mainVoting.candidates ? getPlayerName(mainVoting.candidates[mainVoting.candidates.length - 1]) : "останнього"} (не голосував)`}
+                            </b>
+                          </div>
+                          {revoting && (
+                            <div style={{ ...mafiaStyles.summaryItem, marginTop: "8px", borderTop: "1px solid #1e293b", paddingTop: "8px" }}>
+                              <span>Повторне голосування:</span>
+                              <b>{playerRevote ? `Проголосував проти ${getPlayerName(playerRevote)}` : "Не голосував"}</b>
                             </div>
                           )}
                         </div>
                       </div>
                     )}
-
-                  </div>
-                ) : (
-                  <div style={mafiaStyles.emptyInvestigationField}>
-                    <div style={{ fontSize: "2.5rem" }}>🖱️</div>
-                    <p style={{ marginTop: "10px", margin: 0 }}>Виберіть конкретного гравця зі списку ліворуч,</p>
-                    <p style={{ color: "#64748b", fontSize: "0.85rem" }}>щоб заповнити порожнє поле його персональним розслідуванням, часом промов та голосами.</p>
                   </div>
                 )}
               </div>
@@ -620,75 +751,108 @@ function MafiaDashboard({ game }: { game: any }) {
         {/* === ВКЛАДКА НІЧ X === */}
         {activeTab.startsWith("night_") && (() => {
           const nightNum = parseInt(activeTab.split("_")[1]);
-          const nightSnapshot = snapshots.nights?.find((n: any) => n.night === nightNum) || {};
-          const votesMap = nightSnapshot.mafiaVotes || {};
+          // Шукаємо дії ночі Х, які збережені з dayNumber Х+1
+          const nightActions = timeline.filter((t: any) => t.type === 'night_action' && t.dayNumber === nightNum + 1);
           
+          const mafiaVotesMap: Record<string, string> = {};
+          nightActions.filter((t: any) => t.action === 'kill_vote').forEach((t: any) => mafiaVotesMap[t.userId] = t.targetId);
+          
+          const docAction = nightActions.find((t: any) => t.action === 'heal');
+          const donAction = nightActions.find((t: any) => t.action === 'don_check');
+          const comAction = nightActions.find((t: any) => t.action === 'check');
+
+          // Вираховуємо жертву для цієї вкладки
+          const prevDayDead = snapshots.days?.find((d: any) => d.day === nightNum)?.deadPlayers || [];
+          const todayDead = snapshots.days?.find((d: any) => d.day === nightNum + 1)?.deadPlayers || [];
+          const prevDayExiled = snapshots.votings?.filter((v: any) => v.day === nightNum).map((v: any) => v.eliminatedPlayerId).filter(Boolean) || [];
+          const nightVictims = todayDead.filter((pid: string) => !prevDayDead.includes(pid) && !prevDayExiled.includes(pid));
+          const nightVictim = nightVictims.length > 0 ? nightVictims[0] : null;
+
           return (
             <div style={mafiaStyles.nightContainer}>
               <h3 style={{ ...styles.subTitle, color: "#a855f7" }}>🌌 Детальний аналіз таємних дій Ночі #{nightNum}</h3>
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginTop: "1rem" }}>
+                
+                {/* БЛОК МАФІЇ */}
                 <div style={styles.card}>
-                  <h4 style={{ margin: "0 0 12px 0", color: "#ef4444" }}>🔫 Дії чорної команди (Мафія)</h4>
-                  <p style={{ fontSize: "0.9rem", color: "#94a3b8" }}>Координація вогню та фінальний вибір мети:</p>
-                  <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginTop: "8px" }}>
-                    {Object.keys(votesMap).length > 0 ? (
-                      Object.entries(votesMap).map(([mafiaId, targetId]: [string, any]) => (
+                  <h4 style={{ margin: "0 0 12px 0", color: "#ef4444" }}>
+                    🔫 Мафія <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({mafiaTeam.map((m:any) => m.username).join(', ')})</span>
+                  </h4>
+                  <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px" }}>
+                    {Object.keys(mafiaVotesMap).length > 0 ? (
+                      Object.entries(mafiaVotesMap).map(([mafiaId, targetId]: [string, any]) => (
                         <div key={mafiaId} style={{ marginBottom: "6px", fontSize: "0.9rem" }}>
-                          🥷 <b>{getPlayerName(mafiaId)}</b> висловив вотум смерті проти 🎯 <b>{getPlayerName(targetId)}</b>
+                          🥷 <b>{getPlayerName(mafiaId)}</b> стріляв у 🎯 <b>{getPlayerName(targetId)}</b>
                         </div>
                       ))
                     ) : (
-                      <div style={{ color: "#64748b", fontSize: "0.9rem" }}>Договір було проведено наосліп без явних голосувань.</div>
+                      <div style={{ color: "#64748b", fontSize: "0.9rem" }}>Пропустили хід (або сліпий договір)</div>
                     )}
                     <div style={{ marginTop: "10px", borderTop: "1px solid #334155", paddingTop: "8px", fontWeight: "bold", color: "#ef4444" }}>
-                      Підсумок замаху: {nightSnapshot.killedPlayerId ? `Вбито гравця ${getPlayerName(nightSnapshot.killedPlayerId)}` : "Нікого не вбито (Промах / Сав)"}
+                      Підсумок: {nightVictim ? `Вбито ${getPlayerName(nightVictim)}` : "Промах / Сав"}
                     </div>
                   </div>
                 </div>
 
-                <div style={styles.card}>
-                  <h4 style={{ margin: "0 0 12px 0", color: "#22c55e" }}>🩺 Медична служба (Лікар)</h4>
-                  <p style={{ fontSize: "0.9rem", color: "#94a3b8" }}>Кого міг полікувати і кого вибрав у цю ніч:</p>
-                  <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginTop: "8px", height: "calc(100% - 40px)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
-                      🏥 Обраний на лікування: <span style={{ color: "#22c55e" }}>{nightSnapshot.savedPlayerId ? getPlayerName(nightSnapshot.savedPlayerId) : "Ніхто / Себе"}</span>
+                {/* БЛОК ЛІКАРЯ */}
+                {hasRole("лікар") && (
+                  <div style={styles.card}>
+                    <h4 style={{ margin: "0 0 12px 0", color: "#22c55e" }}>
+                      🩺 Лікар <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({docPlayer?.username})</span>
+                    </h4>
+                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", height: "calc(100% - 40px)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      <div style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
+                        {docAction ? (
+                          <>🏥 Лікував: <span style={{ color: "#22c55e" }}>{getPlayerName(docAction.targetId)}</span></>
+                        ) : (
+                          <span style={{ color: "#64748b" }}>Пропустив хід</span>
+                        )}
+                      </div>
+                      {docAction && nightVictim === null && Object.keys(mafiaVotesMap).length > 0 && (
+                        <div style={{ color: "#22c55e", fontWeight: "bold", marginTop: "8px", fontSize: "0.85rem" }}>🎉 Лікар успішно відбив постріл!</div>
+                      )}
                     </div>
-                    {nightSnapshot.savedPlayerId && nightSnapshot.killedPlayerId === nightSnapshot.savedPlayerId && (
-                      <div style={{ color: "#22c55e", fontWeight: "bold", marginTop: "8px", fontSize: "0.85rem" }}>🎉 Лікар успішно відбив нічний постріл мафії!</div>
-                    )}
                   </div>
-                </div>
+                )}
 
-                <div style={styles.card}>
-                  <h4 style={{ margin: "0 0 12px 0", color: "#f43f5e" }}>🕶️ Пошуки Шерифа (Дон Мафії)</h4>
-                  <p style={{ fontSize: "0.9rem", color: "#94a3b8" }}>Кого перевіряв лідер угруповання:</p>
-                  <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginTop: "8px" }}>
-                    {nightSnapshot.donCheck?.targetId ? (
-                      <div>
-                        Перевірив гравця: <b>{getPlayerName(nightSnapshot.donCheck.targetId)}</b> <br/>
-                        Результат: <b style={{ color: nightSnapshot.donCheck.result ? "#ef4444" : "#22c55e" }}>{nightSnapshot.donCheck.result ? "Знайшов справжнього Комісара! 🔍" : "Звичайний мирний житель"}</b>
-                      </div>
-                    ) : (
-                      <div style={{ color: "#64748b" }}>Цієї ночі Дон не проводив перевірок.</div>
-                    )}
+                {/* БЛОК ДОНА */}
+                {hasRole("дон") && (
+                  <div style={styles.card}>
+                    <h4 style={{ margin: "0 0 12px 0", color: "#f43f5e" }}>
+                      🕶️ Дон <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({donPlayer?.username})</span>
+                    </h4>
+                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px" }}>
+                      {donAction ? (
+                        <div>
+                          Перевірив: <b>{getPlayerName(donAction.targetId)}</b> <br/>
+                          Результат: <b style={{ color: donAction.result === 'commissar' ? "#ef4444" : "#22c55e" }}>{donAction.result === 'commissar' ? "Шериф! 🔍" : "Ні"}</b>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#64748b" }}>Пропустив хід</div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div style={styles.card}>
-                  <h4 style={{ margin: "0 0 12px 0", color: "#38bdf8" }}>🛡️ Слідство правоохоронців (Комісар)</h4>
-                  <p style={{ fontSize: "0.9rem", color: "#94a3b8" }}>Рентгенівські знімки нічних таємниць:</p>
-                  <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginTop: "8px" }}>
-                    {nightSnapshot.commissarCheck?.targetId ? (
-                      <div>
-                        Перевірив гравця: <b>{getPlayerName(nightSnapshot.commissarCheck.targetId)}</b> <br/>
-                        Результат: <b style={{ color: nightSnapshot.commissarCheck.result ? "#ef4444" : "#22c55e" }}>{nightSnapshot.commissarCheck.result ? "Червона загроза! Знайдено МАФІЮ 🚨" : "Гравець чистий (Мирний)"}</b>
-                      </div>
-                    ) : (
-                      <div style={{ color: "#64748b" }}>Комісар спав або був ліквідований раніше.</div>
-                    )}
+                {/* БЛОК КОМІСАРА */}
+                {hasRole("комісар") && (
+                  <div style={styles.card}>
+                    <h4 style={{ margin: "0 0 12px 0", color: "#38bdf8" }}>
+                      🛡️ Комісар <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({comPlayer?.username})</span>
+                    </h4>
+                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px" }}>
+                      {comAction ? (
+                        <div>
+                          Перевірив: <b>{getPlayerName(comAction.targetId)}</b> <br/>
+                          Результат: <b style={{ color: comAction.result === 'mafia' ? "#ef4444" : "#22c55e" }}>{comAction.result === 'mafia' ? "МАФІЯ 🚨" : "Мирний"}</b>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#64748b" }}>Пропустив хід (або мертвий)</div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           );

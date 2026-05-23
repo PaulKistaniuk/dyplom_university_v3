@@ -83,12 +83,16 @@ export async function POST(req: NextRequest) {
     if (game.status === "voting") return 10_000
     if (game.status === "day") return 60_000
     if (game.status === "night") {
+      // ПРОПУСК РОЛЕЙ У ПЕРШУ НІЧ (ОКРІМ МАФІЇ)
+      if (game.dayNumber === 1 && game.phase !== "mafia") return 0;
+
       let roleExists = true
       if (game.phase === "don") roleExists = game.players.some(x => x.role === "don")
       if (game.phase === "commissar") roleExists = game.players.some(x => x.role === "commissar")
       if (game.phase === "doctor") roleExists = game.players.some(x => x.role === "doctor")
 
       if (!roleExists) return 0
+  
       return getActiveRoleAlive() ? 30_000 : 10_000
     }
     return 30_000
@@ -299,9 +303,15 @@ export async function POST(req: NextRequest) {
             ? gameState.heal
             : null,
 
-        donCheck: gameState.currentNightDonCheck || {},
+        donCheck: gameState.currentNightDonCheck ? { 
+          targetId: gameState.currentNightDonCheck, 
+          result: (gameState.donChecks && gameState.donChecks.length > 0) ? gameState.donChecks[gameState.donChecks.length - 1].result : null 
+        } : {},
 
-        commissarCheck: gameState.currentNightCommissarCheck || {},
+        commissarCheck: gameState.currentNightCommissarCheck ? { 
+          targetId: gameState.currentNightCommissarCheck, 
+          result: (gameState.commissarChecks && gameState.commissarChecks.length > 0) ? gameState.commissarChecks[gameState.commissarChecks.length - 1].result : null 
+        } : {},
 
         killedPlayerId: result.killedPlayerId,
 
@@ -421,7 +431,8 @@ export async function POST(req: NextRequest) {
 
       // When discussion ends, record speech duration
       if (gameState.speechStartAt) {
-        const durationSec = Math.round((Date.now() - gameState.speechStartAt) / 1000);
+        let durationSec = Math.round((Date.now() - gameState.speechStartAt) / 1000);
+        durationSec = Math.min(durationSec, 60); // ЛІМІТ У 60 СЕКУНД
         actions.timeline.push({
           type: "speech",
           day: game.dayNumber,
@@ -448,6 +459,7 @@ export async function POST(req: NextRequest) {
                 data: {
                   phase: "single_elim_speech",
                   state: { ...gameState, phaseStartedAt: Date.now(), nominationSpeakerIndex: 0 },
+                  actions: { timeline: actions.timeline, snapshots: actions.snapshots }, // ЗБЕРІГАЄМО ОСТАННЬОГО
                 },
               })
               return NextResponse.json({ success: true })
@@ -461,6 +473,7 @@ export async function POST(req: NextRequest) {
               data: {
                 phase: "nomination_defense",
                 state: { ...gameState, phaseStartedAt: Date.now(), nominationSpeakerIndex: 0 },
+                actions: { timeline: actions.timeline, snapshots: actions.snapshots }, // ЗБЕРІГАЄМО ОСТАННЬОГО
               },
             })
             return NextResponse.json({ success: true })

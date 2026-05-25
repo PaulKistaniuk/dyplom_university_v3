@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
                   select: {
                     id: true,
                     username: true,
+                    avatarUrl: true,
                   },
                 },
               },
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
         const players = session.players.map((p: any) => ({
           userId: p.userId,
           username: p.user?.username || "Користувач",
+          avatarUrl: p.user?.avatarUrl || "",
           number: p.number,
           role: p.role || "citizen",
           state: p.state || {},
@@ -93,10 +95,10 @@ export async function GET(req: NextRequest) {
         const isWin = result.result === "win";
 
         let calculatedWinner = "";
-        if (!isMafiaOrDon && isWin) calculatedWinner = "Мирні Гравці / ШЕРИФ";
+        if (!isMafiaOrDon && isWin) calculatedWinner = "Мирне місто";
         else if (!isMafiaOrDon && !isWin) calculatedWinner = "Мафія";
         else if (isMafiaOrDon && isWin) calculatedWinner = "Мафія";
-        else if (isMafiaOrDon && !isWin) calculatedWinner = "Мирні Гравці / ШЕРИФ";
+        else if (isMafiaOrDon && !isWin) calculatedWinner = "Мирне місто";
 
         // Визначаємо фінального переможця
         const finalWinnerTeam = sessionState.winnerTeam || sessionActions.winnerTeam || calculatedWinner;
@@ -137,7 +139,7 @@ export async function GET(req: NextRequest) {
           const session = await prisma.gameSession.findUnique({
             where: { id: game.gameId },
             select: {
-              players: { select: { id: true, userId: true, user: { select: { username: true } } } }
+              players: { select: { id: true, userId: true, user: { select: { username: true, avatarUrl: true } } } }
             }
           })
 

@@ -134,30 +134,47 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Timer not expired yet" }, { status: 400 })
   }
 
-  // Функція для збереження денного snapshot (щоб викликати в goToNight та при завершенні гри вдень)
-  const recordDaySnapshot = (allPlayersList: any[]) => {
-    const alivePlayersSnapshot = allPlayersList
-      .filter(p => (p.state as any)?.isAlive ?? true)
-      .map(p => p.userId)
+  const recordDaySnapshot = async (allPlayersList: any[]) => {
+    const alivePlayersList = allPlayersList.filter(p => (p.state as any)?.isAlive ?? true)
+
+    const alivePlayersSnapshot = alivePlayersList.map(p => p.userId)
 
     const deadPlayersSnapshot = allPlayersList
       .filter(p => !((p.state as any)?.isAlive ?? true))
       .map(p => p.userId)
 
-    const nominationsSnapshot = gameState.nominatedBy || {};
+    const nominationsSnapshot = gameState.nominatedBy || {}
 
-    // Запобігаємо дублюванню snapshot для одного й того ж дня
-    const exists = actions.snapshots.days.some((d: any) => d.day === game.dayNumber);
-    if (!exists) {
-      actions.snapshots.days.push({
-        day: game.dayNumber,
-        type: "day",
-        alivePlayers: alivePlayersSnapshot,
-        deadPlayers: deadPlayersSnapshot,
-        nominations: nominationsSnapshot,
-        timestamp: Date.now(),
-      })
-    }
+    const exists = actions.snapshots.days.some((d: any) => d.day === game.dayNumber)
+    if (exists) return
+
+    const aliveUserIds = alivePlayersList.map(p => p.userId)
+
+    const aliveGamePlayers = await prisma.gamePlayer.findMany({
+      where: {
+        gameId: sessionId,
+        userId: { in: aliveUserIds },
+      },
+      select: {
+        userId: true,
+        personal: true,
+      },
+    })
+
+    const investigations = aliveGamePlayers.reduce((acc: Record<string, any>, player) => {
+      acc[player.userId] = (player.personal as any)?.investigation || {}
+      return acc
+    }, {})
+
+    actions.snapshots.days.push({
+      day: game.dayNumber,
+      type: "day",
+      alivePlayers: alivePlayersSnapshot,
+      deadPlayers: deadPlayersSnapshot,
+      nominations: nominationsSnapshot,
+      investigations,
+      timestamp: Date.now(),
+    })
   }
   
   const finishGame = async (
@@ -234,7 +251,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Записуємо snapshot дня перед переходом
-    recordDaySnapshot(currentPlayersList);
+    await recordDaySnapshot(currentPlayersList)
 
     const updatedState = {
       ...gameState,
@@ -763,7 +780,7 @@ export async function POST(req: NextRequest) {
   })
   const winner = checkWin(updatedGame!.players)
   if (winner) {
-    recordDaySnapshot(updatedGame!.players)
+    await recordDaySnapshot(updatedGame!.players)
     await finishGame(winner, updatedGame!.players)
   }
 

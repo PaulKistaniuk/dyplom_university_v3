@@ -11,6 +11,8 @@ interface ChatMessage {
   type: "system" | "user" | "self"
 }
 
+type InvestigationMark = "R" | "G" | "B"
+
 export default function GamePage() {
   const params = useParams()
   const sessionId = params?.sessionId as string
@@ -63,21 +65,21 @@ export default function GamePage() {
     }
 
     if (activeSpeaker && (!prev || prev.activeSpeakerId !== activeSpeaker.userId)) {
-      newLogs.push(`Слово має гравець №${state.players.findIndex((p: any) => p.userId === activeSpeaker.userId) + 1} (${activeSpeaker.user.username})`)
+      newLogs.push(`Слово має гравець №${activeSpeaker.number ?? getPlayerNumber(activeSpeaker.userId)} (${activeSpeaker.user.username})`)
     }
 
     if (state.nominations?.length > (prev?.nominations?.length || 0)) {
       const latestId = state.nominations[state.nominations.length - 1]
       const player = state.players.find((p: any) => p.userId === latestId)
       if (player) {
-        newLogs.push(`Гравця №${state.players.indexOf(player) + 1} (${player.user.username}) номіновано на голосування`)
+        newLogs.push(`Гравця №${player.number ?? getPlayerNumber(player.userId)} (${player.user.username}) номіновано на голосування`)
       }
     }
 
     state.players.forEach((p: any, idx: number) => {
       const prevP = prev?.players?.find((x: any) => x.userId === p.userId)
       if (prevP && prevP.isAlive && !p.isAlive) {
-        newLogs.push(`Гравець №${idx + 1} (${p.user.username}) залишає гру 💀`)
+        newLogs.push(`Гравець №${p.number ?? getPlayerNumber(p.userId)} (${p.user.username}) залишає гру 💀`)
       }
     })
 
@@ -219,9 +221,9 @@ export default function GamePage() {
   const getPhaseDetail = () => {
     if (activeSpeaker) {
       if (state.phase === "nomination_defense" || state.phase === "revote_defense") {
-        return `Виправдання гравця №${state.players.findIndex((p: any) => p.userId === activeSpeaker.userId) + 1}`
+        return `Виправдання гравця №${activeSpeaker.number ?? getPlayerNumber(activeSpeaker.userId)}`
       }
-      return `Промова гравця №${state.players.findIndex((p: any) => p.userId === activeSpeaker.userId) + 1}`
+      return `Промова гравця №${activeSpeaker.number ?? getPlayerNumber(activeSpeaker.userId)}`
     }
     return ""
   }
@@ -256,6 +258,54 @@ export default function GamePage() {
     })
   }
 
+  const handleInvestigationChange = async (targetUserId: string, mark: InvestigationMark) => {
+    if (!me?.isAlive) return
+    if (targetUserId === userId) return
+
+    setState((prev: any) => {
+      if (!prev) return prev
+
+      return {
+        ...prev,
+        players: prev.players.map((p: any) => {
+          if (p.userId !== userId) return p
+
+          return {
+            ...p,
+            investigation: {
+              ...(p.investigation || {}),
+              [targetUserId]: mark,
+            },
+          }
+        }),
+      }
+    })
+
+  try {
+    const res = await fetch("/api/game/investigation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        sessionId,
+        targetUserId,
+        mark,
+      }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      console.error("Failed to save investigation:", data.error || res.statusText)
+    }
+  } catch (error) {
+    console.error("Failed to save investigation:", error)
+  }
+}
+
+  const getPlayerNumber = (playerId: string) => {
+    return state.players.find((p: any) => p.userId === playerId)?.number ?? "?"
+  }
+  
   const isDiscussion = state.phase === "discussion"
 
   const isFinished = state.status === "finished"
@@ -325,6 +375,29 @@ export default function GamePage() {
       </span>
     )
   }
+
+  const getInvestigationMark = (targetUserId: string): InvestigationMark => {
+    const mark = me?.investigation?.[targetUserId]
+    return mark === "R" || mark === "B" || mark === "G" ? mark : "G"
+  }
+
+  const getPlayerInvestigationMark = (ownerUserId: string, targetUserId: string): InvestigationMark => {
+    const owner = state.players.find((p: any) => p.userId === ownerUserId)
+    const mark = owner?.investigation?.[targetUserId]
+    return mark === "R" || mark === "B" || mark === "G" ? mark : "G"
+  }
+
+  const getInvestigationClass = (mark: InvestigationMark) => {
+    if (mark === "R") return styles.investigationRed
+    if (mark === "B") return styles.investigationBlack
+    return styles.investigationGray
+  }
+
+  const investigationPlayers = state.players.filter((p: any) => p.userId !== userId)
+
+  const activeSpeakerInvestigationPlayers = activeSpeaker
+    ? state.players.filter((p: any) => p.userId !== activeSpeaker.userId)
+    : []
 
   return (
     <div className={styles.container}>
@@ -405,7 +478,7 @@ export default function GamePage() {
 
                     return (
                       <div key={p.userId} className={cardClass}>
-                        <div className={styles.cardSticker}>№ {index + 1}</div>
+                        <div className={styles.cardSticker}>№ {p.number ?? index + 1}</div>
                         {isNominated && <div className={styles.nominationSticker}>!</div>}
 
                         <div className={styles.avatarWrapper}>
@@ -451,10 +524,55 @@ export default function GamePage() {
               {isDiscussion && (
                 <div className={styles.investigationColumn}>
                   <div className={styles.investigationArea}>
-                    <div className={styles.investigationTitle}>🔍 Персональне розслідування</div>
-                    <div className={styles.investigationPlaceholder}>
-                      {activeSpeaker ? `Аналіз гравця №${state.players.findIndex((p: any) => p.userId === activeSpeaker.userId) + 1}...` : "Очікування..."}
-                    </div>
+                    <div className={styles.investigationTitle}>🔍 Розслідування спікера</div>
+
+                    {activeSpeaker ? (
+                      <>
+                        <div className={styles.speakerInvestigationHeader}>
+                          <img
+                            src={activeSpeaker.user?.avatarUrl || "/default_user.png"}
+                            alt="avatar"
+                            className={styles.speakerInvestigationAvatar}
+                          />
+                          <div>
+                            <div className={styles.speakerInvestigationName}>
+                              № {activeSpeaker.number ?? getPlayerNumber(activeSpeaker.userId)} {activeSpeaker.user?.username}
+                            </div>
+                            <div className={styles.speakerInvestigationSubtext}>
+                              Позначки цього гравця на момент поточної дискусії
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={styles.speakerInvestigationList}>
+                          {activeSpeakerInvestigationPlayers.map((p: any) => {
+                            const mark = getPlayerInvestigationMark(activeSpeaker.userId, p.userId)
+
+                            return (
+                              <div
+                                key={p.userId}
+                                className={`${styles.speakerInvestigationItem} ${getInvestigationClass(mark)} ${!p.isAlive ? styles.investigationDead : ""}`}
+                              >
+                                <div className={styles.speakerInvestigationPlayer}>
+                                  <img
+                                    src={p.user?.avatarUrl || "/default_user.png"}
+                                    alt="avatar"
+                                    className={styles.speakerInvestigationSmallAvatar}
+                                  />
+                                  <span>
+                                    № {p.number ?? getPlayerNumber(p.userId)} {p.user?.username}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <div className={styles.investigationPlaceholder}>
+                        Очікування активного спікера...
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -462,7 +580,72 @@ export default function GamePage() {
           )}
 
           {activeTab === "webcams" && <div style={{ textAlign: "center", padding: "3rem", color: "var(--moon-text-dim)" }}>Вебкамери будуть доступні незабаром...</div>}
-          {activeTab === "investigation" && <div style={{ textAlign: "center", padding: "3rem", color: "var(--moon-text-dim)" }}>Сторінка розслідування в розробці...</div>}
+          {activeTab === "investigation" && (
+            <div className={styles.fullInvestigationArea}>
+              <div className={styles.investigationHeader}>
+                <div>
+                  <h2 className={styles.investigationPageTitle}>Персональне розслідування</h2>
+                  <p className={styles.investigationDescription}>
+                    Позначай гравців власними підозрами. Ці позначки бачиш тільки ти.
+                  </p>
+                </div>
+                {!me?.isAlive && (
+                  <div className={styles.investigationReadonlyBadge}>
+                    Мертвий гравець може тільки переглядати розслідування
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.investigationCardsGrid}>
+                {investigationPlayers.map((p: any) => {
+                  const mark = getInvestigationMark(p.userId)
+
+                  return (
+                    <div
+                      key={p.userId}
+                      className={`${styles.investigationCard} ${getInvestigationClass(mark)} ${!p.isAlive ? styles.investigationDead : ""}`}
+                    >
+                      <div className={styles.investigationNumber}>№ {p.number}</div>
+
+                      <img
+                        src={p.user?.avatarUrl || "/default_user.png"}
+                        alt="avatar"
+                        className={styles.investigationAvatar}
+                      />
+
+                      <div className={styles.investigationName}>
+                        {p.user?.username}
+                      </div>
+
+                      <div className={styles.investigationButtons}>
+                        <button
+                          type="button"
+                          className={`${styles.investigationMarkButton} ${styles.markRed}`}
+                          disabled={!me?.isAlive}
+                          onClick={() => handleInvestigationChange(p.userId, "R")}
+                          aria-label="Позначити червоним"
+                        />
+                        <button
+                          type="button"
+                          className={`${styles.investigationMarkButton} ${styles.markGray}`}
+                          disabled={!me?.isAlive}
+                          onClick={() => handleInvestigationChange(p.userId, "G")}
+                          aria-label="Позначити сірим"
+                        />
+                        <button
+                          type="button"
+                          className={`${styles.investigationMarkButton} ${styles.markBlack}`}
+                          disabled={!me?.isAlive}
+                          onClick={() => handleInvestigationChange(p.userId, "B")}
+                          aria-label="Позначити чорним"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Dev skip button */}
           <button

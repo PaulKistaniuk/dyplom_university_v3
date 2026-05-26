@@ -494,3 +494,223 @@
   height: calc(100vh - 280px);
   overflow-y: auto;
 }
+
+.fullInvestigationArea {
+  background: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.investigationHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.investigationPageTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--moon-accent);
+  margin: 0 0 0.35rem;
+}
+
+.investigationDescription {
+  color: var(--moon-text-dim);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.investigationReadonlyBadge {
+  border: 1px solid var(--moon-border);
+  background: var(--moon-surface-light);
+  color: var(--moon-text-dim);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.investigationCardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+  gap: 1rem;
+}
+
+.investigationCard {
+  position: relative;
+  background: var(--moon-bg);
+  border: 3px solid #94a3b8;
+  border-radius: 14px;
+  padding: 1rem 0.75rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.investigationCard:hover {
+  transform: translateY(-3px);
+}
+
+.investigationGray {
+  border-color: #94a3b8;
+}
+
+.investigationRed {
+  border-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.18);
+}
+
+.investigationBlack {
+  border-color: #020617;
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.35);
+}
+
+.investigationDead {
+  opacity: 0.55;
+  filter: grayscale(0.75);
+}
+
+.investigationNumber {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--sticker-bg);
+  color: var(--sticker-text);
+  border-bottom-right-radius: 10px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.investigationAvatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--moon-border);
+  margin-top: 0.4rem;
+  margin-bottom: 0.55rem;
+}
+
+.investigationName {
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.investigationButtons {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.investigationMarkButton {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+
+.investigationMarkButton:hover:not(:disabled) {
+  transform: scale(1.12);
+  filter: brightness(1.2);
+}
+
+.investigationMarkButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.markRed {
+  background: #ef4444;
+}
+
+.markGray {
+  background: #94a3b8;
+}
+
+.markBlack {
+  background: #020617;
+}
+
+.speakerInvestigationHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--moon-border);
+}
+
+.speakerInvestigationAvatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--moon-border);
+  flex-shrink: 0;
+}
+
+.speakerInvestigationName {
+  font-weight: 800;
+  color: var(--moon-text);
+  font-size: 0.9rem;
+}
+
+.speakerInvestigationSubtext {
+  color: var(--moon-text-dim);
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.speakerInvestigationList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.speakerInvestigationItem {
+  border: 2px solid #94a3b8;
+  background: var(--moon-bg);
+  border-radius: 10px;
+  padding: 0.55rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.speakerInvestigationPlayer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.speakerInvestigationPlayer span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.speakerInvestigationSmallAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--moon-border);
+  flex-shrink: 0;
+}

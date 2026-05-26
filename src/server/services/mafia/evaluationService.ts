@@ -146,11 +146,18 @@ export async function evaluateAndSaveGameResults(gameSessionId: string) {
     const votingSnapshots = snapshots.votings || [];
 
     // Збір вигнаної мафії
-    votingSnapshots.forEach((v: any) => {
-      if (v.eliminatedPlayerId && mafiaIds.includes(v.eliminatedPlayerId)) {
-        if (!eliminatedMafiaIds.includes(v.eliminatedPlayerId)) {
-          eliminatedMafiaIds.push(v.eliminatedPlayerId);
-        }
+    timeline.forEach((event: any) => {
+      if (event.type !== "speech") return;
+      if (event.speechType !== "single_elim" && event.speechType !== "voting_elim") return;
+
+      const eliminatedId = event.playerId;
+
+      if (
+        eliminatedId &&
+        mafiaIds.includes(eliminatedId) &&
+        !eliminatedMafiaIds.includes(eliminatedId)
+      ) {
+        eliminatedMafiaIds.push(eliminatedId);
       }
     });
 
@@ -163,12 +170,24 @@ export async function evaluateAndSaveGameResults(gameSessionId: string) {
     }
 
     let trianglePlayersDetected: string[] = [];
-    const triangleDay = daySnapshots.find((d: any) => d.alivePlayers && d.alivePlayers.length === 3);
+    const triangleDay = daySnapshots.find(
+      (d: any) => Array.isArray(d.alivePlayers) && d.alivePlayers.length === 3
+    );
+
+    const triangleNight = nightSnapshots.find(
+      (n: any) => Array.isArray(n.alivePlayers) && n.alivePlayers.length === 3
+    );
+
+    const triangleVote = votingSnapshots.find(
+      (v: any) => v.votes && Object.keys(v.votes).length === 3
+    );
+
     if (triangleDay) {
       trianglePlayersDetected = triangleDay.alivePlayers;
-    } else {
-      const triangleVote = votingSnapshots.find((v: any) => v.votes && Object.keys(v.votes).length === 3);
-      if (triangleVote) trianglePlayersDetected = Object.keys(triangleVote.votes);
+    } else if (triangleNight) {
+      trianglePlayersDetected = triangleNight.alivePlayers;
+    } else if (triangleVote) {
+      trianglePlayersDetected = Object.keys(triangleVote.votes);
     }
 
     if (trianglePlayersDetected.length === 3) {

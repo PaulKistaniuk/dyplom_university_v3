@@ -37,7 +37,13 @@ export const useSocket = (sessionId: string) => {
     }
   }, [sessionId])
 
-  const sendMessage = (data: { username: string; avatar: string; text: string; userId: string }) => {
+  const sendMessage = (data: {
+    username: string
+    avatar: string
+    text: string
+    userId: string
+    channel?: "public" | "mafia"
+  }) => {
     if (socketRef.current) {
       socketRef.current.emit("send_message", { ...data, sessionId })
     }

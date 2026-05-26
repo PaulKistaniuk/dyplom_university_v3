@@ -159,6 +159,59 @@ export async function POST(req: NextRequest) {
       })
     }
   }
+  
+  const finishGame = async (
+  winner: "mafia" | "citizens",
+  playersList: any[],
+  extraData: Record<string, any> = {}
+) => {
+  const existingResultsCount = await prisma.gameResult.count({
+    where: { gameId: sessionId },
+  })
+
+  await prisma.gameSession.update({
+    where: { id: sessionId },
+    data: {
+      status: "finished",
+      state: {
+        ...gameState,
+        ...extraData,
+        winnerTeam: winner === "mafia" ? "Мафія" : "Мирне місто",
+      },
+      actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+    },
+  })
+
+  await prisma.lobby.update({
+    where: { id: game.lobbyId },
+    data: { status: "finished" },
+  })
+
+  if (existingResultsCount === 0) {
+    const resultsData = playersList.map((p) => {
+      const isMafiaTeam = p.role === "mafia" || p.role === "don"
+      const isWin =
+        (winner === "mafia" && isMafiaTeam) ||
+        (winner === "citizens" && !isMafiaTeam)
+
+      return {
+        gameId: sessionId,
+        userId: p.userId,
+        gameType: "mafia",
+        result: isWin ? "win" : "lose",
+        stats: { role: p.role },
+      }
+    })
+
+    await prisma.gameResult.createMany({ data: resultsData })
+  }
+
+  try {
+    await evaluateAndSaveGameResults(sessionId)
+  } catch (e) {
+    console.error("Mafia evaluation failed:", e)
+  }
+}
 
   // Helper for transitioning to night
   const goToNight = async (killedPlayerId?: string | null) => {
@@ -212,26 +265,7 @@ export async function POST(req: NextRequest) {
     })
     const winner = checkWin(after!.players)
     if (winner) {
-      await prisma.gameSession.update({ where: { id: sessionId }, data: { status: "finished" } })
-      await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
-      
-      const resultsData = after!.players.map((p) => {
-        const isMafiaTeam = p.role === "mafia" || p.role === "don";
-        const isWin = (winner === "mafia" && isMafiaTeam) || (winner === "citizens" && !isMafiaTeam);
-        return {
-          gameId: sessionId,
-          userId: p.userId,
-          gameType: "mafia",
-          result: isWin ? "win" : "lose",
-          stats: { role: p.role },
-        };
-      });
-      await prisma.gameResult.createMany({ data: resultsData });
-      try {
-        await evaluateAndSaveGameResults(sessionId)
-      } catch (e) {
-        console.error("Mafia evaluation failed:", e)
-      }
+      await finishGame(winner, after!.players, updatedState)
     }
   }
 
@@ -360,21 +394,7 @@ export async function POST(req: NextRequest) {
       })
       const nightWinner = checkWin(afterNight!.players)
       if (nightWinner) {
-        await prisma.gameSession.update({ where: { id: sessionId }, data: { status: "finished" } })
-        await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
-
-        const resultsData = afterNight!.players.map((p) => {
-          const isMafiaTeam = p.role === "mafia" || p.role === "don";
-          const isWin = (nightWinner === "mafia" && isMafiaTeam) || (nightWinner === "citizens" && !isMafiaTeam);
-          return {
-            gameId: sessionId,
-            userId: p.userId,
-            gameType: "mafia",
-            result: isWin ? "win" : "lose",
-            stats: { role: p.role },
-          };
-        });
-        await prisma.gameResult.createMany({ data: resultsData });
+        await finishGame(nightWinner, afterNight!.players, updatedState)
       }
 
       return NextResponse.json({ success: true })
@@ -463,20 +483,20 @@ export async function POST(req: NextRequest) {
             await goToNight()
             return NextResponse.json({ success: true })
           } else if (noms.length === 1) {
-            if (game.lobby.lastWords) {
-              await prisma.gameSession.update({
-                where: { id: sessionId },
-                data: {
-                  phase: "single_elim_speech",
-                  state: { ...gameState, phaseStartedAt: Date.now(), speechStartAt: Date.now(), nominationSpeakerIndex: 0 },
-                  actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+            await prisma.gameSession.update({
+              where: { id: sessionId },
+              data: {
+                phase: "single_elim_speech",
+                state: {
+                  ...gameState,
+                  phaseStartedAt: Date.now(),
+                  speechStartAt: Date.now(),
+                  nominationSpeakerIndex: 0,
                 },
-              })
-              return NextResponse.json({ success: true })
-            } else {
-              await goToNight(noms[0])
-              return NextResponse.json({ success: true })
-            }
+                actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+              },
+            })
+            return NextResponse.json({ success: true })
           } else {
             await prisma.gameSession.update({
               where: { id: sessionId },
@@ -605,19 +625,21 @@ export async function POST(req: NextRequest) {
       });
 
       if (!result.tie) {
-        if (game.lobby.lastWords) {
-          await prisma.gameSession.update({
-            where: { id: sessionId },
-            data: {
-              status: "day",
-              phase: "voting_elim_speech",
-              state: { ...gameState, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now(), speechStartAt: Date.now() },
-              actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+        await prisma.gameSession.update({
+          where: { id: sessionId },
+          data: {
+            status: "day",
+            phase: "voting_elim_speech",
+            state: {
+              ...gameState,
+              votes: {},
+              nightKilledId: result.eliminated,
+              phaseStartedAt: Date.now(),
+              speechStartAt: Date.now(),
             },
-          })
-        } else {
-          await goToNight(result.eliminated)
-        }
+            actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+          },
+        })
       } else {
         await prisma.gameSession.update({
           where: { id: sessionId },
@@ -712,19 +734,21 @@ export async function POST(req: NextRequest) {
       });
 
       if (!result.tie) {
-        if (game.lobby.lastWords) {
-          await prisma.gameSession.update({
-            where: { id: sessionId },
-            data: {
-              status: "day",
-              phase: "voting_elim_speech",
-              state: { ...gameState, votes: {}, nightKilledId: result.eliminated, phaseStartedAt: Date.now(), speechStartAt: Date.now() },
-              actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+        await prisma.gameSession.update({
+          where: { id: sessionId },
+          data: {
+            status: "day",
+            phase: "voting_elim_speech",
+            state: {
+              ...gameState,
+              votes: {},
+              nightKilledId: result.eliminated,
+              phaseStartedAt: Date.now(),
+              speechStartAt: Date.now(),
             },
-          })
-        } else {
-          await goToNight(result.eliminated)
-        }
+            actions: { timeline: actions.timeline, snapshots: actions.snapshots },
+          },
+        })
       } else {
         await goToNight() // Ніхто не вилітає
       }
@@ -739,30 +763,8 @@ export async function POST(req: NextRequest) {
   })
   const winner = checkWin(updatedGame!.players)
   if (winner) {
-    // Гарантуємо, що фінальний snapshot дня запишеться перед завершенням
-    recordDaySnapshot(updatedGame!.players);
-
-    await prisma.gameSession.update({
-      where: { id: sessionId },
-      data: {
-        status: "finished",
-        actions: { timeline: actions.timeline, snapshots: actions.snapshots }
-      }
-    })
-    await prisma.lobby.update({ where: { id: game.lobbyId }, data: { status: "finished" } })
-    
-    const resultsData = updatedGame!.players.map((p) => {
-      const isMafiaTeam = p.role === "mafia" || p.role === "don";
-      const isWin = (winner === "mafia" && isMafiaTeam) || (winner === "citizens" && !isMafiaTeam);
-      return {
-        gameId: sessionId,
-        userId: p.userId,
-        gameType: "mafia",
-        result: isWin ? "win" : "lose",
-        stats: { role: p.role },
-      };
-    });
-    await prisma.gameResult.createMany({ data: resultsData });
+    recordDaySnapshot(updatedGame!.players)
+    await finishGame(winner, updatedGame!.players)
   }
 
   return NextResponse.json({ success: true })

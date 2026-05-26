@@ -216,106 +216,6 @@ export default function GamePage() {
   if (!state || !state.players) return <div className={styles.container} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Завантаження стану гри...</div>
   if (!me) return <div className={styles.container} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Завантаження гравців...</div>
 
-  // --- ЕКРАН КІНЦЯ ГРИ ---
-  if (state.status === "finished") {
-    // Визначаємо переможця: беремо з об'єкта state, або вираховуємо за наявністю живої мафії
-    const winnerTeam = state.winner || state.state?.winner || (state.players?.some((p: any) => p.isAlive && (p.role === "mafia" || p.role === "don")) ? "mafia" : "citizens");
-    const isMafiaWin = winnerTeam === "mafia";
-
-    return (
-      <div className={styles.container} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: "2rem" }}>
-        <div style={{ maxWidth: "800px", width: "100%", backgroundColor: "var(--moon-surface, #131b2e)", borderRadius: "16px", border: "1px solid #223154", padding: "2.5rem", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", textAlign: "center" }}>
-          
-          <div style={{ fontSize: "4.5rem", marginBottom: "0.5rem" }}>
-            {isMafiaWin ? "🕶️" : "🎉"}
-          </div>
-          
-          <h1 style={{ fontSize: "2.8rem", color: isMafiaWin ? "var(--role-mafia, #ef4444)" : "var(--role-citizen, #3b82f6)", fontWeight: "900", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.5rem" }}>
-            {isMafiaWin ? "Перемога Команди Мафії" : "Перемога Мирного Міста"}
-          </h1>
-          
-          <p style={{ color: "var(--moon-text-dim, #94a3b8)", fontSize: "1.1rem", marginBottom: "2.5rem" }}>
-            Гра успішно завершилась на {state.dayNumber} раунді. Усі секретні карти гравців розкрито:
-          </p>
-
-          {/* Сітка розсекречених гравців */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "1.2rem", textAlign: "left" }}>
-            {state.players.map((p: any, index: number) => {
-              let roleLabel = "";
-              let roleColor = "";
-              
-              switch (p.role) {
-                case "citizen": roleLabel = "Мирний"; roleColor = "var(--role-citizen, #3b82f6)"; break;
-                case "mafia": roleLabel = "Мафія"; roleColor = "var(--role-mafia, #ef4444)"; break;
-                case "don": roleLabel = "Дон 🕶️"; roleColor = "#b91c1c"; break;
-                case "commissar": roleLabel = "Комісар 🔍"; roleColor = "var(--role-commissar, #a855f7)"; break;
-                case "doctor": roleLabel = "Лікар ➕"; roleColor = "var(--role-doctor, #10b981)"; break;
-                default: roleLabel = p.role || "Громадянин"; roleColor = "#94a3b8";
-              }
-
-              return (
-                <div 
-                  key={p.userId} 
-                  style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "0.8rem", 
-                    padding: "0.8rem", 
-                    backgroundColor: "var(--moon-surface-light, #1e293b)", 
-                    borderRadius: "12px", 
-                    border: p.isAlive ? `1px solid ${roleColor}50` : "1px solid #334155",
-                    opacity: p.isAlive ? 1 : 0.55,
-                    position: "relative"
-                  }}
-                >
-                  {/* Номер стільця */}
-                  <div style={{ fontSize: "0.85rem", fontWeight: "bold", color: "var(--moon-accent, #64748b)", minWidth: "24px" }}>
-                    №{index + 1}
-                  </div>
-                  
-                  {/* Аватар */}
-                  <img 
-                    src={p.user?.avatarUrl || "/default_user.png"} 
-                    alt="avatar" 
-                    style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover", border: `2px solid ${p.isAlive ? "#10b981" : "#ef4444"}` }} 
-                  />
-                  
-                  {/* Інформація про гравця */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: "700", color: "#f8fafc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.95rem" }}>
-                      {p.user?.username} {p.userId === userId && <span style={{ color: "var(--moon-accent)", fontSize: "0.8rem" }}>(Ви)</span>}
-                    </div>
-                    
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
-                      {/* Роль */}
-                      <span style={{ fontSize: "0.7rem", fontWeight: "800", color: roleColor, backgroundColor: `${roleColor}15`, padding: "2px 6px", borderRadius: "4px", border: `1px solid ${roleColor}30`, textTransform: "uppercase" }}>
-                        {roleLabel}
-                      </span>
-                      {/* Статус живий/мертвий */}
-                      <span style={{ fontSize: "0.75rem" }}>
-                        {p.isAlive ? "🟢 Живий" : "💀 Мертвий"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Кнопка виходу */}
-          <button 
-            onClick={() => window.location.href = "/"} 
-            style={{ marginTop: "3rem", backgroundColor: "var(--moon-surface-light, #223154)", color: "#f8fafc", border: "1px solid #334155", padding: "0.8rem 2.5rem", borderRadius: "8px", cursor: "pointer", fontWeight: "600", fontSize: "1rem", transition: "all 0.2s" }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#2d3f6d"}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "var(--moon-surface-light, #223154)"}
-          >
-            Повернутися на головну
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const getPhaseDetail = () => {
     if (activeSpeaker) {
       if (state.phase === "nomination_defense" || state.phase === "revote_defense") {
@@ -358,17 +258,55 @@ export default function GamePage() {
 
   const isDiscussion = state.phase === "discussion"
 
-  const renderRoleSticker = (pRole: string, isCheck: boolean = false) => {
+  const isFinished = state.status === "finished"
+
+  const getWinnerLabel = () => {
+    const winnerTeam =
+      state.winner ||
+      state.state?.winner ||
+      state.winnerTeam ||
+      state.state?.winnerTeam
+
+    if (winnerTeam === "mafia" || winnerTeam === "Мафія") {
+      return "Перемогла Мафія"
+    }
+
+    if (winnerTeam === "citizens" || winnerTeam === "Мирне місто") {
+      return "Перемогло Мирне місто"
+    }
+
+    const aliveMafia = state.players?.some(
+      (p: any) => p.isAlive && (p.role === "mafia" || p.role === "don")
+    )
+
+    return aliveMafia ? "Перемогла Мафія" : "Перемогло Мирне місто"
+  }
+
+  const renderRoleSticker = (
+    pRole: string,
+    isCheck: boolean = false,
+    checkType: "commissar" | "don" = "commissar"
+  ) => {
     let label = ""
     let color = ""
 
     if (isCheck) {
-      if (pRole === "mafia" || pRole === "don") {
-        label = "Мафія"
-        color = "var(--role-mafia)"
+      if (checkType === "don") {
+        if (pRole === "commissar") {
+          label = "Комісар"
+          color = "var(--role-commissar)"
+        } else {
+          label = "Мирний громадянин"
+          color = "var(--role-citizen)"
+        }
       } else {
-        label = "Мирний громадянин"
-        color = "var(--role-citizen)"
+        if (pRole === "mafia" || pRole === "don") {
+          label = "Мафія"
+          color = "var(--role-mafia)"
+        } else {
+          label = "Мирний громадянин"
+          color = "var(--role-citizen)"
+        }
       }
     } else {
       switch (pRole) {
@@ -393,22 +331,27 @@ export default function GamePage() {
       {/* 1. Info Bar */}
       <div className={styles.infoBar}>
         <div className={styles.sticker}>
-          {state.status === "night" ? "№ Ніч" : "№ День"} {state.dayNumber}
+          {isFinished ? "Кінець гри" : `${state.status === "night" ? "№ Ніч" : "№ День"} ${state.dayNumber}`}
         </div>
+
         <div className={styles.phaseIcon}>
-          {state.status === "night" ? "🌙" : "☀️"}
+          {isFinished ? "🏁" : state.status === "night" ? "🌙" : "☀️"}
         </div>
+
         <div className={styles.phaseLabel}>
-          {phaseLabels[state.phase] || state.phase}
+          {isFinished ? getWinnerLabel() : phaseLabels[state.phase] || state.phase}
         </div>
+
         <div className={styles.phaseDetail}>
-          {getPhaseDetail()}
-          {shouldShowTimer && timeLeft !== null && (
+          {!isFinished && getPhaseDetail()}
+
+          {!isFinished && shouldShowTimer && timeLeft !== null && (
             <span style={{ marginLeft: "10px", color: timeLeft <= 5 ? "#ef4444" : "var(--moon-accent)", fontWeight: "bold" }}>
               ⏱️ {timeLeft}s
             </span>
           )}
-          {activeSpeaker?.userId === userId && (
+
+          {!isFinished && activeSpeaker?.userId === userId && (
             <button
               className={styles.actionButton}
               style={{ marginLeft: "15px", width: "auto", padding: "4px 12px", background: "var(--moon-surface-light)", fontSize: "0.75rem" }}
@@ -448,12 +391,12 @@ export default function GamePage() {
                     const isMyTeammate = (role === "mafia" || role === "don") && (p.role === "mafia" || p.role === "don") && p.userId !== userId
                     const myCheck = myChecks.find((c: any) => c.targetId === p.userId)
 
-                    const canKill = state.status === "night" && state.dayNumber > 1 && state.phase === "mafia" && p.isAlive && (role === "mafia" || role === "don") && me?.isAlive && canAct
-                    const canDonCheck = state.status === "night" && state.dayNumber > 1 && state.phase === "don" && role === "don" && p.isAlive && me?.isAlive && canAct && p.userId !== userId && !["mafia", "don"].includes(p.role) && !myCheckedPlayers.includes(p.userId)
-                    const canCommissarCheck = state.status === "night" && state.dayNumber > 1 && state.phase === "commissar" && role === "commissar" && p.isAlive && me?.isAlive && canAct && !myCheckedPlayers.includes(p.userId) && p.userId !== userId
-                    const canHeal = state.status === "night" && state.dayNumber > 1 && state.phase === "doctor" && role === "doctor" && p.isAlive && me?.isAlive && canAct && p.userId !== state.lastHeal && !(p.userId === userId && selfHealUsed)
-                    const canNominate = state.status === "day" && state.dayNumber > 1 && state.phase === "discussion" && p.isAlive && p.userId !== userId && activeSpeaker?.userId === userId && !hasNominatedDay && !(state.nominations || []).includes(p.userId)
-                    const canVote = state.status === "voting" && p.isAlive && me?.isAlive && !hasVotedDay && userId && !state.votes?.[userId] && ((state.phase === "voting" && (state.nominations || []).includes(p.userId)) || (state.phase === "revote" && (state.revoteCandidates || []).includes(p.userId)))
+                    const canKill = !isFinished && state.status === "night" && state.dayNumber > 1 && state.phase === "mafia" && p.isAlive && (role === "mafia" || role === "don") && me?.isAlive && canAct
+                    const canDonCheck = !isFinished && state.status === "night" && state.dayNumber > 1 && state.phase === "don" && role === "don" && p.isAlive && me?.isAlive && canAct && p.userId !== userId && !["mafia", "don"].includes(p.role) && !myCheckedPlayers.includes(p.userId)
+                    const canCommissarCheck = !isFinished && state.status === "night" && state.dayNumber > 1 && state.phase === "commissar" && role === "commissar" && p.isAlive && me?.isAlive && canAct && !myCheckedPlayers.includes(p.userId) && p.userId !== userId
+                    const canHeal = !isFinished && state.status === "night" && state.dayNumber > 1 && state.phase === "doctor" && role === "doctor" && p.isAlive && me?.isAlive && canAct && p.userId !== state.lastHeal && !(p.userId === userId && selfHealUsed)
+                    const canNominate = !isFinished && state.status === "day" && state.dayNumber > 1 && state.phase === "discussion" && p.isAlive && p.userId !== userId && activeSpeaker?.userId === userId && !hasNominatedDay && !(state.nominations || []).includes(p.userId)
+                    const canVote = !isFinished && state.status === "voting" && p.isAlive && me?.isAlive && !hasVotedDay && userId && !state.votes?.[userId] && ((state.phase === "voting" && (state.nominations || []).includes(p.userId)) || (state.phase === "revote" && (state.revoteCandidates || []).includes(p.userId)))
 
                     let cardClass = styles.playerCard
                     if (!p.isAlive) cardClass += ` ${styles.dead}`
@@ -492,9 +435,10 @@ export default function GamePage() {
                           </div>
 
                           <div className={styles.placeholder}>
-                            {p.userId === userId && p.role && renderRoleSticker(p.role)}
-                            {isMyTeammate && p.role && renderRoleSticker(p.role)}
-                            {myCheck && renderRoleSticker(myCheck.result, true)}
+                            {isFinished && p.role && renderRoleSticker(p.role)}
+                            {!isFinished && p.userId === userId && p.role && renderRoleSticker(p.role)}
+                            {!isFinished && isMyTeammate && p.role && renderRoleSticker(p.role)}
+                            {!isFinished && myCheck && renderRoleSticker(myCheck.result, true, role === "don" ? "don" : "commissar")}
                           </div>
                         </div>
                       </div>
@@ -537,6 +481,7 @@ export default function GamePage() {
             logs={chatMessages}
             user={{ ...me.user, id: userId }}
             isAlive={!!me?.isAlive}
+            role={role}
             gameState={state}
           />
         </div>

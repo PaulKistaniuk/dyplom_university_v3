@@ -9,6 +9,7 @@ interface GameChatProps {
   logs: any[]
   user: any
   isAlive: boolean
+  role?: string | null
   gameState?: {
     phase: string
     dayNumber: number
@@ -17,7 +18,7 @@ interface GameChatProps {
   }
 }
 
-export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChatProps) => {
+export const GameChat = ({ sessionId, logs, user, isAlive, role, gameState }: GameChatProps) => {
   const [activeTab, setActiveTab] = useState<"logs" | "chat" | "ai">("logs")
   const { messages, sendMessage } = useSocket(sessionId)
   const [inputText, setInputText] = useState("")
@@ -25,6 +26,11 @@ export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChat
     { id: "ai-1", text: "Привіт! Я твій асистент. Питай будь-що про правила гри Мафія.", isAi: true }
   ])
   const [isAiLoading, setIsAiLoading] = useState(false)
+  const isMafiaRole = role === "mafia" || role === "don"
+  const isMafiaNightChat =
+    gameState?.status === "night" &&
+    gameState?.phase === "mafia" &&
+    isMafiaRole
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -44,7 +50,8 @@ export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChat
         username: user.username,
         avatar: user.avatarUrl || "/default_user.png",
         text: textToSend,
-        userId: user.id
+        userId: user.id,
+        channel: isMafiaNightChat ? "mafia" : "public",
       })
     } else if (activeTab === "ai") {
       const newUserMsg = { id: Date.now().toString(), text: textToSend, isAi: false }
@@ -93,6 +100,11 @@ export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChat
     return parts.map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part)
   }
 
+  const visibleMessages = messages.filter((msg: any) => {
+    if (msg.channel !== "mafia") return true
+    return isMafiaRole
+  })
+
   return (
     <div className={styles.chatContainer}>
       <div className={styles.tabs}>
@@ -123,7 +135,7 @@ export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChat
           </div>
         ))}
 
-        {activeTab === "chat" && messages.map((msg) => {
+        {activeTab === "chat" && visibleMessages.map((msg) => {
           const isMe = msg.userId === user.id
           return (
             <div key={msg.id} className={`${styles.msgWrapper} ${isMe ? styles.msgLeft : styles.msgRight}`}>
@@ -132,6 +144,11 @@ export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChat
                 <span className={styles.username}>{msg.username}</span>
               </div>
               <div className={`${styles.bubble} ${isMe ? styles.bubbleLeft : styles.bubbleRight}`}>
+                {msg.channel === "mafia" && (
+                  <span style={{ display: "block", fontSize: "0.7rem", opacity: 0.75, marginBottom: "4px" }}>
+                    Чат мафії
+                  </span>
+                )}
                 {msg.text}
               </div>
             </div>
@@ -159,7 +176,13 @@ export const GameChat = ({ sessionId, logs, user, isAlive, gameState }: GameChat
             <>
               <input 
                 className={styles.input}
-                placeholder={activeTab === "chat" ? "Написати гравцям..." : "Запитати асистента..."}
+                placeholder={
+                  activeTab === "chat"
+                    ? isMafiaNightChat
+                      ? "Написати мафії..."
+                      : "Написати гравцям..."
+                    : "Запитати асистента..."
+                }
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
               />

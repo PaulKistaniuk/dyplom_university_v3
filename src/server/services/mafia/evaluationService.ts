@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  normalizeRole,
+  resolveCitizensWinByGameResult,
+} from "./evaluationUtils"
 
 const CONFIG = {
   START_SCORE: 50,
@@ -8,6 +12,7 @@ const CONFIG = {
   }
 };
 
+/*
 function normalizeRole(role: any) {
   return String(role || "").trim().toLowerCase();
 }
@@ -38,6 +43,7 @@ function resolveCitizensWinByGameResult(role: string, result: string) {
 
   throw new Error(`Unknown mafia role in GameResult.stats.role: ${role}`);
 }
+  */
 
 export async function evaluateAndSaveGameResults(gameSessionId: string) {
   try {

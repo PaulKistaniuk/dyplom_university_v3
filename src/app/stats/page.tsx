@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/shared/hooks/useAuth"
 
-export default function StatsPage() {
+function StatsPageContent() {
   const { user } = useAuth()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -1789,4 +1789,12 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.05em"
   }
+}
+
+export default function StatsPage() {
+  return (
+    <Suspense fallback={<div style={styles.page}>Завантаження статистики...</div>}>
+      <StatsPageContent />
+    </Suspense>
+  )
 }

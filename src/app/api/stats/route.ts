@@ -139,7 +139,19 @@ export async function GET(req: NextRequest) {
           const session = await prisma.gameSession.findUnique({
             where: { id: game.gameId },
             select: {
-              players: { select: { id: true, userId: true, user: { select: { username: true, avatarUrl: true } } } }
+              players: {
+                select: {
+                  id: true,
+                  userId: true,
+                  personal: true,
+                  user: {
+                    select: {
+                      username: true,
+                      avatarUrl: true,
+                    },
+                  },
+                },
+              },
             }
           })
 
@@ -154,7 +166,8 @@ export async function GET(req: NextRequest) {
               stats: {
                 ...((game.stats as any) || {}),
                 playerMap,
-                players: session.players
+                players: session.players,
+                personal: session.players.find((p: any) => p.userId === userId)?.personal || {},
               }
             }
           }

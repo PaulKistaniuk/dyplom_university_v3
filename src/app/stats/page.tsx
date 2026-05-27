@@ -21,6 +21,9 @@ function StatsPageContent() {
   const [filterMode, setFilterMode] = useState("all")
   const [filterRole, setFilterRole] = useState("all")
 
+  const [statView, setStatView] = useState("champion")
+  const [mafiaStatRole, setMafiaStatRole] = useState("mafia")
+
   const selectedId = searchParams?.get("gameId")
 
   useEffect(() => {
@@ -121,7 +124,62 @@ function StatsPageContent() {
     skull: filteredHistory.filter(h => h.gameType === "whoami" && h.stats.settings?.gameMode === "loser" && h.result === "lose").length
   }
 
-  const [statView, setStatView] = useState("champion")
+  const normalizeMafiaRole = (role: string) => {
+    const r = String(role || "").toLowerCase()
+
+    if (r.includes("don") || r.includes("дон")) return "don"
+    if (r.includes("mafia") || r.includes("мафія")) return "mafia"
+    if (r.includes("commissar") || r.includes("sheriff") || r.includes("комісар") || r.includes("шериф")) return "commissar"
+    if (r.includes("doctor") || r.includes("лікар") || r.includes("доктор")) return "doctor"
+
+    return "citizen"
+  }
+
+  const getMafiaGameBadges = (game: any) => {
+    const stats = game.stats || {}
+    const evaluation = stats.personal?.evaluation || stats.evaluation || {}
+
+    const rawBadges = [
+      ...(Array.isArray(stats.badges) ? stats.badges : []),
+      ...(Array.isArray(evaluation.badges) ? evaluation.badges : []),
+    ]
+
+    const title = `${stats.title || ""} ${evaluation.title || ""}`.toLowerCase()
+    const badges = new Set<string>()
+
+    rawBadges.forEach((badge: string) => {
+      const normalized = String(badge).toLowerCase()
+
+      if (normalized.includes("mvp")) badges.add("mvp")
+      if (normalized.includes("evp")) badges.add("evp")
+      if (normalized.includes("clutch") || normalized.includes("клатч")) badges.add("clutch")
+      if (normalized.includes("triangle") || normalized.includes("трикут")) badges.add("triangle")
+      if (normalized.includes("better_luck") || normalized.includes("unluck") || normalized.includes("повезе")) badges.add("unluck")
+    })
+
+    if (title.includes("mvp")) badges.add("mvp")
+    if (title.includes("evp")) badges.add("evp")
+    if (title.includes("clutch") || title.includes("клатч")) badges.add("clutch")
+    if (title.includes("triangle") || title.includes("трикут")) badges.add("triangle")
+    if (title.includes("unluck") || title.includes("повезе")) badges.add("unluck")
+
+    return Array.from(badges)
+  }
+
+  const mafiaHistory = filteredHistory.filter(h => h.gameType === "mafia")
+
+  const mafiaRoleStats = mafiaHistory.filter(game => {
+    const role = normalizeMafiaRole(game.stats?.role)
+    return role === mafiaStatRole
+  })
+
+  const mafiaBadgeCounts = {
+    mvp: mafiaRoleStats.filter(game => getMafiaGameBadges(game).includes("mvp")).length,
+    evp: mafiaRoleStats.filter(game => getMafiaGameBadges(game).includes("evp")).length,
+    clutch: mafiaRoleStats.filter(game => getMafiaGameBadges(game).includes("clutch")).length,
+    triangle: mafiaRoleStats.filter(game => getMafiaGameBadges(game).includes("triangle")).length,
+    unluck: mafiaRoleStats.filter(game => getMafiaGameBadges(game).includes("unluck")).length,
+  }
 
   const handleSelectGame = (game: any) => {
     router.push(`/stats?gameId=${game.id}`)
@@ -247,6 +305,74 @@ function StatsPageContent() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {filterGameType === "mafia" && (
+            <div style={{ ...styles.card, marginBottom: "1.5rem", borderLeft: "4px solid #ef4444" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <select
+                  style={{ ...styles.select, width: "100%", padding: "4px 8px", fontSize: "0.75rem" }}
+                  value={mafiaStatRole}
+                  onChange={e => setMafiaStatRole(e.target.value)}
+                >
+                  <option value="mafia">🔫 Мафія</option>
+                  <option value="don">🕶️ Дон</option>
+                  <option value="commissar">🛡️ Комісар</option>
+                  <option value="doctor">🩺 Лікар</option>
+                  <option value="citizen">👤 Мирний громадянин</option>
+                </select>
+              </div>
+
+              <div style={styles.statRow}>
+                <span>Ігор:</span>
+                <b>{mafiaRoleStats.length}</b>
+              </div>
+
+              <div style={styles.statRow}>
+                <span>Перемог:</span>
+                <b style={{ color: "#22c55e" }}>
+                  {mafiaRoleStats.filter(h => h.result === "win").length}
+                </b>
+              </div>
+
+              <div style={styles.statRow}>
+                <span>Програшів:</span>
+                <b style={{ color: "#ef4444" }}>
+                  {mafiaRoleStats.filter(h => h.result === "lose").length}
+                </b>
+              </div>
+
+              <div style={styles.mafiaBadgeStatsBlock}>
+                <div style={styles.mafiaBadgeStatsRow}>
+                  <div style={styles.mafiaBadgeBox} title="MVP">
+                    <span style={{ ...styles.mafiaBadgeLabel, color: "#fbbf24" }}>MVP</span>
+                    <b>{mafiaBadgeCounts.mvp}</b>
+                  </div>
+
+                  <div style={styles.mafiaBadgeBox} title="EVP">
+                    <span style={{ ...styles.mafiaBadgeLabel, color: "#cbd5e1" }}>EVP</span>
+                    <b>{mafiaBadgeCounts.evp}</b>
+                  </div>
+                </div>
+
+                <div style={styles.mafiaBadgeStatsRow}>
+                  <div style={styles.mafiaBadgeBox} title="Clutch">
+                    <span style={{ ...styles.mafiaBadgeLabel, color: "#ef4444" }}>C</span>
+                    <b>{mafiaBadgeCounts.clutch}</b>
+                  </div>
+
+                  <div style={styles.mafiaBadgeBox} title="Triangle">
+                    <span style={{ ...styles.mafiaBadgeLabel, color: "#22c55e" }}>▲</span>
+                    <b>{mafiaBadgeCounts.triangle}</b>
+                  </div>
+
+                  <div style={styles.mafiaBadgeBox} title="Повезе наступного разу">
+                    <span style={{ ...styles.mafiaBadgeLabel, color: "#38bdf8" }}>UNLUCK</span>
+                    <b>{mafiaBadgeCounts.unluck}</b>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -426,14 +552,324 @@ const renderEvaluationBadges = (id: string) => {
   const comPlayer = getRolePlayers("комісар")[0] || getRolePlayers("шериф")[0];
 
   // Точне визначення смерті
+  const getNightSnapshotForDay = (dayNum: number) => {
+    return snapshots.nights?.find((n: any) => Number(n.night) === dayNum) || null;
+  };
+
+  const getPreviousDayDeadPlayers = (dayNum: number) => {
+    if (dayNum <= 1) return [];
+
+    const prevDaySnapshot = snapshots.days?.find((d: any) => Number(d.day) === dayNum - 1);
+    return prevDaySnapshot?.deadPlayers || [];
+  };
+
+  const getNewlyDeadPlayersForDay = (dayNum: number, daySnapshot: any) => {
+    const prevDead = getPreviousDayDeadPlayers(dayNum);
+    const currentDead = daySnapshot?.deadPlayers || [];
+
+    return currentDead.filter((pid: string) => !prevDead.includes(pid));
+  };
+
+  const getDayEliminationId = (dayNum: number) => {
+    const dayVotings = snapshots.votings?.filter((v: any) => Number(v.day) === dayNum) || [];
+    const lastVoting = dayVotings.length > 0 ? dayVotings[dayVotings.length - 1] : null;
+
+    if (lastVoting?.eliminatedPlayerId) {
+      return lastVoting.eliminatedPlayerId;
+    }
+
+    const eliminationSpeech = timeline.find((t: any) =>
+      Number(t.day) === dayNum &&
+      t.type === "speech" &&
+      (t.speechType === "voting_elim" || t.speechType === "single_elim")
+    );
+
+    return eliminationSpeech?.playerId || null;
+  };
+
+  const didVotingHappen = (dayNum: number) => {
+    const dayVotings = snapshots.votings?.filter((v: any) => Number(v.day) === dayNum) || [];
+    const hasVotingSnapshot = dayVotings.some((v: any) => Object.keys(v.votes || {}).length > 0);
+
+    const hasVoteTimelineEvents = timeline.some((t: any) =>
+      t.type === "vote" &&
+      Number(t.dayNumber) === dayNum
+    );
+
+    return hasVotingSnapshot || hasVoteTimelineEvents;
+  };
+
+  const getNightVictimForDay = (dayNum: number, daySnapshot: any) => {
+    const nightSnapshot = getNightSnapshotForDay(dayNum);
+
+    if (!nightSnapshot) return null;
+
+    const killedCandidate =
+      nightSnapshot.killedPlayerId ||
+      nightSnapshot.finalKillTarget ||
+      null;
+
+    const healedPlayer =
+      nightSnapshot.savedPlayerId ||
+      nightSnapshot.doctorHeal ||
+      null;
+
+    const nightDeadPlayers = Array.isArray(nightSnapshot.deadPlayers)
+      ? nightSnapshot.deadPlayers
+      : [];
+
+    // Якщо мафія стріляла, але лікар вилікував саме цю ціль, жертви немає
+    if (killedCandidate && healedPlayer === killedCandidate && !nightDeadPlayers.includes(killedCandidate)) {
+      return null;
+    }
+
+    // Найнадійніше джерело фактичної смерті — deadPlayers у snapshot ночі
+    if (nightDeadPlayers.length > 0) {
+      if (killedCandidate && nightDeadPlayers.includes(killedCandidate)) {
+        return killedCandidate;
+      }
+
+      return nightDeadPlayers[0];
+    }
+
+    // Якщо deadPlayers порожній, але killedCandidate є — перевіряємо через денний snapshot
+    const newlyDead = getNewlyDeadPlayersForDay(dayNum, daySnapshot);
+    const dayExiled = getDayEliminationId(dayNum);
+    const realNightVictim = newlyDead.find((pid: string) => pid !== dayExiled);
+
+    return realNightVictim || null;
+  };
+
   const getDeathInfo = (pid: string) => {
     const votingExile = snapshots.votings?.find((v: any) => v.eliminatedPlayerId === pid);
-    if (votingExile) return `Вигнаний на голосуванні в День ${votingExile.day}`;
+    if (votingExile) return `Вигнаний у День ${votingExile.day}`;
 
-    const deathDay = snapshots.days?.find((d: any) => d.deadPlayers?.includes(pid));
-    // Якщо гравець є в мертвих Дня Х, значить він помер у Ніч Х-1
-    if (deathDay) return `Вбитий мафією в Ніч ${deathDay.day - 1}`;
+    const eliminationSpeech = timeline.find((t: any) =>
+      t.playerId === pid &&
+      t.type === "speech" &&
+      (t.speechType === "voting_elim" || t.speechType === "single_elim")
+    );
+
+    if (eliminationSpeech?.day) {
+      return `Вигнаний у День ${eliminationSpeech.day}`;
+    }
+
+    const nightDeath = snapshots.nights?.find((n: any) =>
+      n.killedPlayerId === pid || n.finalKillTarget === pid
+    );
+
+    if (nightDeath) return `Вбитий вночі ${nightDeath.night}`;
+
     return null;
+  };
+
+  const getNightDeathNumber = (pid: string) => {
+    const nightDeath = snapshots.nights?.find((n: any) => {
+      const deadPlayers = Array.isArray(n.deadPlayers) ? n.deadPlayers : [];
+      return deadPlayers.includes(pid) || n.killedPlayerId === pid || n.finalKillTarget === pid;
+    });
+
+    return nightDeath ? Number(nightDeath.night) : null;
+  };
+
+  const getDayExileNumber = (pid: string) => {
+    const votingExile = snapshots.votings?.find((v: any) => v.eliminatedPlayerId === pid);
+    if (votingExile?.day) return Number(votingExile.day);
+
+    const eliminationSpeech = timeline.find((t: any) =>
+      t.playerId === pid &&
+      t.type === "speech" &&
+      (t.speechType === "voting_elim" || t.speechType === "single_elim")
+    );
+
+    return eliminationSpeech?.day ? Number(eliminationSpeech.day) : null;
+  };
+
+  const getPlayerDayStatus = (pid: string | null, dayNum: number) => {
+    if (!pid || pid === "GENERAL_LOG") {
+      return {
+        blocked: false,
+        message: "",
+        exiledToday: false,
+        exiledTodayMessage: "",
+      };
+    }
+
+    const nightDeathNumber = getNightDeathNumber(pid);
+    const dayExileNumber = getDayExileNumber(pid);
+
+    // Вбили вночі — вже цього дня профіль не показуємо
+    if (nightDeathNumber !== null && nightDeathNumber <= dayNum) {
+      return {
+        blocked: true,
+        message: `Гравця було вбито вночі ${nightDeathNumber}`,
+        exiledToday: false,
+        exiledTodayMessage: "",
+      };
+    }
+
+    // Вигнали в попередній день — у наступних днях профіль не показуємо
+    if (dayExileNumber !== null && dayExileNumber < dayNum) {
+      return {
+        blocked: true,
+        message: `Гравця було вигнано в день ${dayExileNumber}`,
+        exiledToday: false,
+        exiledTodayMessage: "",
+      };
+    }
+
+    // Вигнали саме в цей день — профіль ще можна дивитись, але внизу показуємо повідомлення
+    if (dayExileNumber !== null && dayExileNumber === dayNum) {
+      return {
+        blocked: false,
+        message: "",
+        exiledToday: true,
+        exiledTodayMessage: "Гравця було вигнано на голосуванні",
+      };
+    }
+
+    return {
+      blocked: false,
+      message: "",
+      exiledToday: false,
+      exiledTodayMessage: "",
+    };
+  };
+
+  const getInvestigationBorderColor = (mark: string) => {
+    if (mark === "R") return "#ef4444";
+    if (mark === "B") return "#020617";
+    return "#94a3b8";
+  };
+
+  const renderPersonalInvestigation = (daySnapshot: any, ownerUserId: string | null) => {
+    if (!ownerUserId || ownerUserId === "GENERAL_LOG") return null;
+      if (!daySnapshot) return null;
+
+      const investigation = daySnapshot?.investigations?.[ownerUserId] || {};
+
+      const targets = allSessionPlayers.filter((pid: string) => pid !== ownerUserId);
+
+      if (targets.length === 0) return null;
+
+      return (
+        <div style={mafiaStyles.personalInvestigationStatsBlock}>
+          <h4 style={mafiaStyles.personalInvestigationStatsTitle}>🔍 Персональне розслідування</h4>
+
+          <div style={mafiaStyles.personalInvestigationMiniGrid}>
+            {targets.map((targetUserId: string) => {
+              const mark = String(investigation[targetUserId] || "G");
+              const avatarUrl = getPlayerAvatar(targetUserId);
+              const seatNumber = getPlayerNumber(targetUserId);
+
+              return (
+                <div
+                  key={targetUserId}
+                  title={`${seatNumber !== null ? `№${seatNumber} ` : ""}${getPlayerName(targetUserId)} — ${getPlayerRole(targetUserId)}`}
+                  style={{
+                    ...mafiaStyles.personalInvestigationMiniCard,
+                    borderColor: getInvestigationBorderColor(mark),
+                  }}
+                >
+                  <div style={mafiaStyles.personalInvestigationMiniAvatar}>
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={getPlayerName(targetUserId)}
+                        style={mafiaStyles.avatarImage}
+                      />
+                    ) : (
+                      <span>{getPlayerName(targetUserId).slice(0, 1).toUpperCase()}</span>
+                    )}
+                  </div>
+
+                  <div style={mafiaStyles.personalInvestigationMiniName}>
+                    {seatNumber !== null ? `№${seatNumber}` : "№?"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    const renderMiniPlayer = (playerId: string, options?: { compact?: boolean }) => {
+    const avatarUrl = getPlayerAvatar(playerId);
+    const seatNumber = getPlayerNumber(playerId);
+
+    return (
+      <div style={options?.compact ? mafiaStyles.miniPlayerCompact : mafiaStyles.miniPlayer}>
+        <div style={options?.compact ? mafiaStyles.miniAvatarCompact : mafiaStyles.miniAvatar}>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={getPlayerName(playerId)}
+              style={mafiaStyles.avatarImage}
+            />
+          ) : (
+            <span>{getPlayerName(playerId).slice(0, 1).toUpperCase()}</span>
+          )}
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          <div style={options?.compact ? mafiaStyles.miniPlayerNameCompact : mafiaStyles.miniPlayerName}>
+            {getPlayerName(playerId)}
+          </div>
+          {!options?.compact && (
+            <div style={mafiaStyles.miniPlayerSub}>
+              {seatNumber !== null ? `№${seatNumber}` : "№?"} · {getPlayerRole(playerId)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderNightActionLine = (
+    actorId: string,
+    actionText: string,
+    targetId?: string | null
+  ) => {
+    return (
+      <div style={mafiaStyles.nightActionLine}>
+        {renderMiniPlayer(actorId, { compact: true })}
+
+        <span style={mafiaStyles.nightActionText}>{actionText}</span>
+
+        {targetId ? renderMiniPlayer(targetId, { compact: true }) : null}
+      </div>
+    );
+  };
+
+  const getVoteCounts = (votes: Record<string, any>) => {
+    const counts: Record<string, number> = {};
+
+    Object.values(votes || {}).forEach((targetId: any) => {
+      if (!targetId) return;
+      counts[targetId] = (counts[targetId] || 0) + 1;
+    });
+
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  };
+
+  const renderVoteCountsTable = (votes: Record<string, any>) => {
+    const counts = getVoteCounts(votes);
+
+    if (counts.length === 0) return null;
+
+    return (
+      <div style={mafiaStyles.voteCountBox}>
+        <div style={mafiaStyles.voteCountTitle}>Підсумок голосів</div>
+
+        {counts.map(([targetId, count]) => (
+          <div key={targetId} style={mafiaStyles.voteCountRow}>
+            {renderMiniPlayer(targetId, { compact: true })}
+            <b style={mafiaStyles.voteCountValue}>{count}</b>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -579,7 +1015,6 @@ const renderEvaluationBadges = (id: string) => {
           const todayDead = daySnapshot.deadPlayers || [];
           const todayExiled = snapshots.votings?.filter((v: any) => v.day === dayNum).map((v: any) => v.eliminatedPlayerId).filter(Boolean) || [];
           const nightVictims = todayDead.filter((pid: string) => !prevDayDead.includes(pid) && !todayExiled.includes(pid));
-          const nightVictim = nightVictims.length > 0 ? nightVictims[0] : null;
 
           const docAction = prevNightActions.find((t: any) => t.action === 'heal');
           const donAction = prevNightActions.find((t: any) => t.action === 'don_check');
@@ -589,10 +1024,27 @@ const renderEvaluationBadges = (id: string) => {
           const deadList = daySnapshot.deadPlayers || [];
 
           // Голосування та переголосування
-          const dayVotings = snapshots.votings?.filter((v: any) => v.day === dayNum) || [];
+          const dayVotings = snapshots.votings?.filter((v: any) => Number(v.day) === dayNum) || [];
           const mainVoting = dayVotings.find((v: any) => v.type === "voting");
           const revoting = dayVotings.find((v: any) => v.type === "revoting");
           const lastVoting = dayVotings.length > 0 ? dayVotings[dayVotings.length - 1] : null;
+
+          const exactExiledPlayerId = getDayEliminationId(dayNum);
+          const nightVictim = getNightVictimForDay(dayNum, daySnapshot);
+          const votingHappened = didVotingHappen(dayNum);
+
+          const newlyDeadToday = getNewlyDeadPlayersForDay(dayNum, daySnapshot);
+          const dayDeadDetails = newlyDeadToday.map((pid: string) => {
+            if (pid === nightVictim) {
+              return { userId: pid, type: "night" };
+            }
+
+            if (pid === exactExiledPlayerId) {
+              return { userId: pid, type: "day" };
+            }
+
+            return { userId: pid, type: "unknown" };
+          });
 
           // Персональні дані вибраного гравця
           const selectedPlayerSpeeches = timeline.filter((t: any) => t.day === dayNum && t.playerId === selectedPlayerId && t.type === "speech");
@@ -612,10 +1064,18 @@ const renderEvaluationBadges = (id: string) => {
           const playerRevote = revoting?.votes?.[selectedPlayerId || ""];
 
           const deathInfo = selectedPlayerId ? getDeathInfo(selectedPlayerId) : null;
+          const selectedPlayerDayStatus = getPlayerDayStatus(selectedPlayerId, dayNum);
 
-          // Визначаємо, чи був гравець живим на початку цього дня (тобто наприкінці попереднього)
-          const prevDaySnapshot = dayNum > 1 ? snapshots.days?.find((d: any) => d.day === dayNum - 1) : null;
-          const isSelectedDeadBeforeThisDay = dayNum > 1 ? !(prevDaySnapshot?.alivePlayers?.includes(selectedPlayerId)) : false;
+          const getRolePlayerStatusText = (player: any) => {
+          if (!player) return null;
+
+          const isAlive = aliveList.includes(player.userId);
+          return isAlive ? null : "Гравець з цією роллю вибув";
+        };
+
+        const donStatusText = getRolePlayerStatusText(donPlayer);
+        const docStatusText = getRolePlayerStatusText(docPlayer);
+        const comStatusText = getRolePlayerStatusText(comPlayer);
 
           return (
             <div style={{ display: "flex", gap: "1.5rem", height: "100%", overflow: "hidden" }}>
@@ -633,15 +1093,19 @@ const renderEvaluationBadges = (id: string) => {
                     </h4>
                     
                     <div style={mafiaStyles.summaryItem}>
-                      <span>Жертва мафії:</span> 
-                      <b>{nightVictim ? getPlayerName(nightVictim) : "Ніхто"}</b>
+                      <span>Жертва мафії:</span>
+                      <b>
+                        {nightVictim
+                          ? `${getPlayerName(nightVictim)}`
+                          : "Відсутня"}
+                      </b>
                     </div>
 
                     {/* Візит лікаря */}
                     {(hasRole("лікар") || hasRole("доктор") || hasRole("doctor") || !!docAction) && (
                       <div style={mafiaStyles.summaryItem}>
                         <span>Візит лікаря:</span> 
-                        <b>{docAction ? getPlayerName(docAction.targetId) : "Пропустив хід"}</b>
+                        <b>{docAction ? getPlayerName(docAction.targetId) : (docStatusText || "Мертвий")}</b>
                       </div>
                     )}
 
@@ -655,7 +1119,7 @@ const renderEvaluationBadges = (id: string) => {
                               ? 'Комісар' 
                               : 'Мирний'
                           })`
-                        ) : "Пропустив хід"}</b>
+                        ) : (donStatusText || "Мертвий")}</b>
                       </div>
                     )}
 
@@ -669,7 +1133,7 @@ const renderEvaluationBadges = (id: string) => {
                               ? 'Мафія' 
                               : 'Мирний'
                           })`
-                        ) : "Пропустив хід"}</b>
+                        ) : (comStatusText || "Мертвий")}</b>
                       </div>
                     )}
 
@@ -682,25 +1146,24 @@ const renderEvaluationBadges = (id: string) => {
                       fontWeight: "bold",
                       color: nightVictim ? "#ef4444" : "#22c55e"
                     }}>
-                      📢 {nightVictim ? `Цієї ночі було вбито гравця: ${getPlayerName(nightVictim)}` : "Цієї ночі нікого не вбили"}
+                      {nightVictim
+                        ? `Цієї ночі було вбито гравця: ${getPlayerName(nightVictim)}`
+                        : "Ніч закінчилась без жертв"
+                      }
                     </div>
                   </div>
                 )}
 
                 <div style={{ ...styles.card, flex: 1, display: "flex", flexDirection: "column" }}>
-                  <button 
+                  <button
                     style={{
-                      ...mafiaStyles.tabButton, 
-                      width: "100%", 
-                      marginBottom: "10px", 
-                      backgroundColor: selectedPlayerId === 'GENERAL_LOG' ? "rgba(56, 189, 248, 0.1)" : "#1e293b",
-                      borderWidth: "1px",
-                      borderStyle: "solid",
-                      borderColor: selectedPlayerId === 'GENERAL_LOG' ? "#38bdf8" : "#334155" // Фікс React помилки змішування стилів
+                      ...mafiaStyles.generalLogButton,
+                      ...(selectedPlayerId === "GENERAL_LOG" ? mafiaStyles.generalLogButtonActive : {}),
                     }}
-                    onClick={() => setSelectedPlayerId('GENERAL_LOG')}
+                    onClick={() => setSelectedPlayerId("GENERAL_LOG")}
                   >
-                    📖 Загальний журнал подій
+                    <span style={mafiaStyles.generalLogIcon}>📖</span>
+                    <span>Загальний журнал подій</span>
                   </button>
 
                   <h4 style={{ margin: "0 0 10px 0", color: "#94a3b8" }}>Гравці на цей день</h4>
@@ -791,38 +1254,63 @@ const renderEvaluationBadges = (id: string) => {
                       <h3 style={{ margin: "0 0 1rem 0", color: "#38bdf8" }}>📖 Журнал подій: День {dayNum}</h3>
                       
                       <h4 style={{ color: "#fbbf24", marginBottom: "8px" }}>🗣️ Дискусії та номінації</h4>
-                      <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155" }}>
+
+                      <div style={mafiaStyles.dayActionList}>
                         {daySpeeches.map((s: any, idx: number) => {
                           let nom = allDayNominations.find((t: any) => t.nominatorId === s.playerId);
-                          
+
                           if (!nom && s.playerId === firstSpeakerId) {
-                            nom = allDayNominations.find((t: any) => 
+                            nom = allDayNominations.find((t: any) =>
                               !daySpeeches.some((speech: any) => speech.playerId === t.nominatorId)
                             );
                           }
 
                           return (
-                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #1e293b" }}>
-                              <span style={{ width: "30%" }}>{getPlayerName(s.playerId)}</span>
-                              <span style={{ width: "20%", color: "#94a3b8" }}>{s.durationSec} сек</span>
-                              <span style={{ width: "50%", textAlign: "right", color: nom ? "#ef4444" : "#64748b" }}>
-                                {nom ? `Виставив: ${getPlayerName(nom.targetId)}` : "Не виставляв"}
-                              </span>
+                            <div key={idx} style={mafiaStyles.dayActionRow}>
+                              <div style={mafiaStyles.dayActionLeft}>
+                                {renderMiniPlayer(s.playerId)}
+                              </div>
+
+                              <div style={mafiaStyles.dayActionCenter}>
+                                {nom ? (
+                                  <>
+                                    <span style={mafiaStyles.actionMuted}>Виставив</span>
+                                    {renderMiniPlayer(nom.targetId, { compact: true })}
+                                  </>
+                                ) : null}
+                              </div>
+
+                              <div style={mafiaStyles.dayActionRight}>
+                                <b>{s.durationSec} сек</b>
+                              </div>
                             </div>
-                          )
+                          );
                         })}
                       </div>
 
                       {timeline.some((t: any) => t.day === dayNum && t.type === "speech" && (t.speechType === "defense" || t.speechType === "nomination_defense")) && (
                         <>
                           <h4 style={{ color: "#a855f7", marginBottom: "8px" }}>🛡️ Промови виправдання</h4>
-                          <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155" }}>
-                            {timeline.filter((t: any) => t.day === dayNum && t.type === "speech" && (t.speechType === "defense" || t.speechType === "nomination_defense")).map((s: any, idx: number) => (
-                              <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #1e293b" }}>
-                                <span>{getPlayerName(s.playerId)}</span>
-                                <span style={{ color: "#94a3b8" }}>{s.durationSec} сек</span>
-                              </div>
-                            ))}
+                          <div style={mafiaStyles.dayActionList}>
+                            {timeline
+                              .filter((t: any) =>
+                                t.day === dayNum &&
+                                t.type === "speech" &&
+                                (t.speechType === "defense" || t.speechType === "nomination_defense")
+                              )
+                              .map((s: any, idx: number) => (
+                                <div key={idx} style={mafiaStyles.dayActionRow}>
+                                  <div style={mafiaStyles.dayActionLeft}>
+                                    {renderMiniPlayer(s.playerId)}
+                                  </div>
+
+                                  <div style={mafiaStyles.dayActionCenter} />
+
+                                  <div style={mafiaStyles.dayActionRight}>
+                                    <b>{s.durationSec} сек</b>
+                                  </div>
+                                </div>
+                              ))}
                           </div>
                         </>
                       )}
@@ -830,43 +1318,75 @@ const renderEvaluationBadges = (id: string) => {
                       {mainVoting && Object.keys(mainVoting.votes || {}).length > 0 && (
                         <>
                           <h4 style={{ color: "#ef4444", marginBottom: "8px" }}>🗳️ Основне голосування</h4>
-                          <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+
+                          <div style={mafiaStyles.voteGrid}>
                             {Object.entries(mainVoting.votes || {}).map(([voterId, targetId]: [string, any]) => (
-                              <div key={voterId} style={{ fontSize: "0.85rem" }}>
-                                <b>{getPlayerName(voterId)}</b> ➡️ {getPlayerName(targetId)}
+                              <div key={voterId} style={mafiaStyles.voteCard}>
+                                {renderMiniPlayer(voterId, { compact: true })}
+
+                                <span style={mafiaStyles.voteArrow}>→</span>
+
+                                {renderMiniPlayer(targetId, { compact: true })}
                               </div>
                             ))}
                           </div>
+
+                          {renderVoteCountsTable(mainVoting.votes || {})}
                         </>
                       )}
 
                       {revoting && Object.keys(revoting.votes || {}).length > 0 && (
                         <>
-                          <h4 style={{ color: "#ef4444", marginBottom: "8px" }}>⚖️ Переголосування (Розпил)</h4>
-                          <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", marginBottom: "1rem", border: "1px solid #334155", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                          <h4 style={{ color: "#ef4444", marginBottom: "8px" }}>⚖️ Переголосування</h4>
+
+                          <div style={mafiaStyles.voteGrid}>
                             {Object.entries(revoting.votes || {}).map(([voterId, targetId]: [string, any]) => (
-                              <div key={voterId} style={{ fontSize: "0.85rem" }}>
-                                <b>{getPlayerName(voterId)}</b> ➡️ {getPlayerName(targetId)}
+                              <div key={voterId} style={mafiaStyles.voteCard}>
+                                {renderMiniPlayer(voterId, { compact: true })}
+
+                                <span style={mafiaStyles.voteArrow}>→</span>
+
+                                {renderMiniPlayer(targetId, { compact: true })}
                               </div>
                             ))}
                           </div>
+
+                          {renderVoteCountsTable(revoting.votes || {})}
                         </>
                       )}
 
-                      {/* ПІДСУМОК ДНЯ: СТАБІЛЬНЕ ВІДОБРАЖЕННЯ ВИГНАННЯ ГРАВЦЯ */}
-                      <div style={{ 
-                        marginTop: "1rem", 
-                        padding: "12px", 
-                        backgroundColor: exactExiledPlayerId ? "rgba(239, 68, 68, 0.1)" : "rgba(56, 189, 248, 0.1)", 
-                        borderRadius: "8px", 
-                        border: `1px solid ${exactExiledPlayerId ? "#ef4444" : "#38bdf8"}` 
-                      }}>
-                        <h4 style={{ margin: "0 0 8px 0", color: exactExiledPlayerId ? "#ef4444" : "#38bdf8" }}>🏁 Підсумок дня</h4>
-                        <b>
-                          {exactExiledPlayerId 
-                            ? `Місто вигнало гравця: ${getPlayerName(exactExiledPlayerId)}` 
-                            : "Рішення не прийнято. Нікого не вигнано."}
-                        </b>
+                      {/* ПІДСУМОК ДНЯ */}
+                      <div
+                        style={{
+                          marginTop: "1rem",
+                          padding: "12px",
+                          backgroundColor: exactExiledPlayerId
+                            ? "rgba(239, 68, 68, 0.1)"
+                            : votingHappened
+                              ? "rgba(148, 163, 184, 0.08)"
+                              : "rgba(56, 189, 248, 0.08)",
+                          borderRadius: "8px",
+                          border: exactExiledPlayerId
+                            ? "1px solid rgba(239, 68, 68, 0.35)"
+                            : votingHappened
+                              ? "1px solid rgba(148, 163, 184, 0.25)"
+                              : "1px solid rgba(56, 189, 248, 0.25)",
+                          color: "#f8fafc",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {exactExiledPlayerId ? (
+                          <span>
+                            🚪 За підсумками дня вигнано гравця:{" "}
+                            <span style={{ color: "#ef4444" }}>
+                              {getPlayerName(exactExiledPlayerId)}
+                            </span>
+                          </span>
+                        ) : votingHappened ? (
+                          <span>⚖️ Рішення не прийнято. Нікого не вигнано.</span>
+                        ) : (
+                          <span>ℹ️ Голосування не відбувалось.</span>
+                        )}
                       </div>
 
                     </div>
@@ -874,20 +1394,23 @@ const renderEvaluationBadges = (id: string) => {
                 })()}
 
                 {/* КАБІНЕТ МЕРТВОГО ГРАВЦЯ */}
-                {selectedPlayerId && selectedPlayerId !== 'GENERAL_LOG' && isSelectedDeadBeforeThisDay && (
-                  <div style={{...mafiaStyles.personalInvestigationContainer, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column"}}>
+                {/* КАБІНЕТ ГРАВЦЯ, ЯКИЙ УЖЕ ВИБУВ ДО ЦЬОГО ДНЯ */}
+                {selectedPlayerId && selectedPlayerId !== "GENERAL_LOG" && selectedPlayerDayStatus.blocked && (
+                  <div style={{ ...mafiaStyles.personalInvestigationContainer, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
                     <div style={{ fontSize: "3rem" }}>💀</div>
-                    <h3 style={{ margin: "10px 0", color: "#ef4444" }}>Гравець мертвий</h3>
-                    <p style={{ color: "#94a3b8" }}>{deathInfo}</p>
+                    <h3 style={{ margin: "10px 0", color: "#ef4444" }}>Гравець вибув</h3>
+                    <p style={{ color: "#94a3b8" }}>{selectedPlayerDayStatus.message || deathInfo}</p>
                   </div>
                 )}
 
                 {/* ПЕРСОНАЛЬНИЙ КАБІНЕТ ЖИВОГО ГРАВЦЯ */}
-                {selectedPlayerId && selectedPlayerId !== 'GENERAL_LOG' && !isSelectedDeadBeforeThisDay && (
+                {selectedPlayerId && selectedPlayerId !== "GENERAL_LOG" && !selectedPlayerDayStatus.blocked && (
                   <div style={mafiaStyles.personalInvestigationContainer}>
                     <h3 style={{ margin: "0 0 1rem 0", color: "#38bdf8" }}>
                       📊 Аналітика: <span style={{ color: "#fff" }}>{getPlayerName(selectedPlayerId)}</span>
                     </h3>
+
+                    {renderPersonalInvestigation(daySnapshot, selectedPlayerId)}
                     
                     <div style={mafiaStyles.investigationGrid}>
                       <div style={mafiaStyles.investigationItem}>
@@ -938,6 +1461,12 @@ const renderEvaluationBadges = (id: string) => {
                         </div>
                       </div>
                     )}
+
+                    {selectedPlayerDayStatus.exiledToday && (
+                      <div style={mafiaStyles.playerDayExitNotice}>
+                        🚪 {selectedPlayerDayStatus.exiledTodayMessage}
+                      </div>
+                      )}
                   </div>
                 )}
               </div>
@@ -992,25 +1521,28 @@ const renderEvaluationBadges = (id: string) => {
 
           return (
             <div style={mafiaStyles.nightContainer}>
-              <h3 style={{ ...styles.subTitle, color: "#a855f7" }}>🌌 Детальний аналіз таємних дій Ночі #{nightNum}</h3>
+              <h3 style={{ ...styles.subTitle, color: "#a855f7" }}>🌌 Детальний аналіз таємних дій Ночі #{nightNum+1}</h3>
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginTop: "1rem" }}>
                 
                 {/* БЛОК МАФІЇ */}
                 <div style={styles.card}>
                   <h4 style={{ margin: "0 0 12px 0", color: "#ef4444" }}>
-                    🔫 Мафія <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({dynamicMafiaNames})</span>
+                    🔫 Мафія
                   </h4>
-                  <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px" }}>
+
+                  <div style={mafiaStyles.nightActionBox}>
                     {Object.keys(mafiaVotesMap).length > 0 ? (
                       Object.entries(mafiaVotesMap).map(([mafiaId, targetId]: [string, any]) => (
-                        <div key={mafiaId} style={{ marginBottom: "6px", fontSize: "0.9rem" }}>
-                          🥷 <b>{getPlayerName(mafiaId)}</b> стріляв у 🎯 <b>{getPlayerName(targetId)}</b>
+                        <div key={mafiaId}>
+                          {renderNightActionLine(mafiaId, "стріляв у", targetId)}
                         </div>
                       ))
                     ) : (
-                      <div style={{ color: "#64748b", fontSize: "0.9rem" }}>
-                        {!isDonAlive && Object.keys(mafiaVotesMap).length === 0 ? "Покинули гру 💀" : "Пропустили хід (або сліпий договір)"}
+                      <div style={mafiaStyles.nightEmptyText}>
+                        {!isDonAlive && Object.keys(mafiaVotesMap).length === 0
+                          ? "Покинули гру 💀"
+                          : "Пропустили хід"}
                       </div>
                     )}
                   </div>
@@ -1020,18 +1552,21 @@ const renderEvaluationBadges = (id: string) => {
                 {(hasRole("лікар") || hasRole("доктор") || hasRole("doctor") || !!docAction || !!backupDocId) && (
                   <div style={styles.card}>
                     <h4 style={{ margin: "0 0 12px 0", color: "#22c55e" }}>
-                      🩺 Лікар <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({backupDocId ? getPlayerName(backupDocId) : "Активний лікар"})</span>
+                      🩺 Лікар
                     </h4>
-                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px", height: "calc(100% - 40px)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                      <div style={{ fontSize: "1.1rem", fontWeight: "bold" }}>
-                        {docAction ? (
-                          <>🏥 Лікував: <span style={{ color: "#22c55e" }}>{getPlayerName(docAction.targetId)}</span></>
-                        ) : (
-                          <span style={{ color: "#64748b" }}>{isDocAlive ? "Пропустив хід" : "Покинув гру 💀"}</span>
-                        )}
-                      </div>
-                      {docAction && nightVictim === null && Object.keys(mafiaVotesMap).length > 0 && (
-                        <div style={{ color: "#22c55e", fontWeight: "bold", marginTop: "8px", fontSize: "0.85rem" }}>🎉 Лікар успішно відбив постріл!</div>
+
+                    <div style={mafiaStyles.nightActionBox}>
+                      {docAction ? (
+                        <>
+                          {renderNightActionLine(docAction.userId || backupDocId, "лікував", docAction.targetId)}
+                          {nightVictim === null && Object.keys(mafiaVotesMap).length > 0 && (
+                            <div style={mafiaStyles.nightSuccessText}>Лікар успішно відбив постріл</div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={mafiaStyles.nightEmptyText}>
+                          {isDocAlive ? "Пропустив хід" : "Покинув гру 💀"}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1041,16 +1576,25 @@ const renderEvaluationBadges = (id: string) => {
                 {(hasRole("дон") || hasRole("don") || !!donAction || !!backupDonId) && (
                   <div style={styles.card}>
                     <h4 style={{ margin: "0 0 12px 0", color: "#f43f5e" }}>
-                      🕶️ Дон <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({backupDonId ? getPlayerName(backupDonId) : "Активний дон"})</span>
+                      🕶️ Дон
                     </h4>
-                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px" }}>
+
+                    <div style={mafiaStyles.nightActionBox}>
                       {donAction ? (
-                        <div>
-                          Перевірив: <b>{getPlayerName(donAction.targetId)}</b> <br/>
-                          Результат: <b style={{ color: donAction.result === 'commissar' ? "#ef4444" : "#22c55e" }}>{donAction.result === 'commissar' ? "Шериф! 🔍" : "Ні"}</b>
-                        </div>
+                        <>
+                          {renderNightActionLine(donAction.userId || backupDonId, "перевірив", donAction.targetId)}
+
+                          <div style={mafiaStyles.nightResultText}>
+                            Результат:{" "}
+                            <b style={{ color: donAction.result === "commissar" ? "#ef4444" : "#22c55e" }}>
+                              {donAction.result === "commissar" ? "Комісар! 🔍" : "Мирний"}
+                            </b>
+                          </div>
+                        </>
                       ) : (
-                        <div style={{ color: "#64748b" }}>{isDonAlive ? "Пропустив хід" : "Покинув гру 💀"}</div>
+                        <div style={mafiaStyles.nightEmptyText}>
+                          {isDonAlive ? "Пропустив хід" : "Покинув гру 💀"}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1060,16 +1604,36 @@ const renderEvaluationBadges = (id: string) => {
                 {(hasRole("комісар") || hasRole("шериф") || hasRole("sheriff") || hasRole("commissar") || !!comAction || !!backupComId) && (
                   <div style={styles.card}>
                     <h4 style={{ margin: "0 0 12px 0", color: "#38bdf8" }}>
-                      🛡️ Комісар <span style={{fontSize: "0.8rem", color: "#94a3b8", fontWeight: "normal"}}>({backupComId ? getPlayerName(backupComId) : "Активний комісар"})</span>
+                      🛡️ Комісар
                     </h4>
-                    <div style={{ backgroundColor: "#0f172a", padding: "12px", borderRadius: "8px" }}>
+
+                    <div style={mafiaStyles.nightActionBox}>
                       {comAction ? (
-                        <div>
-                          Перевірив: <b>{getPlayerName(comAction.targetId)}</b> <br/>
-                          Результат: <b style={{ color: comAction.result === 'mafia' ? "#ef4444" : "#22c55e" }}>{comAction.result === 'mafia' ? "МАФІЯ 🚨" : "Мирний"}</b>
-                        </div>
+                        <>
+                          {renderNightActionLine(comAction.userId || backupComId, "перевірив", comAction.targetId)}
+
+                          <div style={mafiaStyles.nightResultText}>
+                            Результат:{" "}
+                            <b style={{
+                              color:
+                                comAction.result === "mafia" ||
+                                comAction.result === "don" ||
+                                comAction.result === true
+                                  ? "#ef4444"
+                                  : "#22c55e"
+                            }}>
+                              {comAction.result === "mafia" ||
+                              comAction.result === "don" ||
+                              comAction.result === true
+                                ? "Мафія"
+                                : "Мирний"}
+                            </b>
+                          </div>
+                        </>
                       ) : (
-                        <div style={{ color: "#64748b" }}>{isComAlive ? "Пропустив хід" : "Покинув гру 💀"}</div>
+                        <div style={mafiaStyles.nightEmptyText}>
+                          {isComAlive ? "Пропустив хід" : "Покинув гру 💀"}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1372,7 +1936,422 @@ scoreText: {
     padding: "1.5rem",
     height: "100%",
     overflowY: "auto"
-  }
+  },
+  generalLogButton: {
+    width: "100%",
+    marginBottom: "10px",
+    padding: "10px 12px",
+    borderRadius: "10px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#334155",
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    color: "#cbd5e1",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontWeight: 700,
+    fontSize: "0.85rem",
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+  },
+
+  generalLogButtonActive: {
+    borderColor: "#38bdf8",
+    backgroundColor: "rgba(56, 189, 248, 0.1)",
+    color: "#e0f2fe",
+  },
+
+  generalLogIcon: {
+    width: "24px",
+    height: "24px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "8px",
+    backgroundColor: "rgba(56, 189, 248, 0.12)",
+  },
+
+  dayDeathsBox: {
+    marginTop: "1rem",
+    backgroundColor: "#0f172a",
+    border: "1px solid #334155",
+    borderRadius: "10px",
+    padding: "12px",
+  },
+
+  dayDeathsTitle: {
+    color: "#f8fafc",
+    margin: "0 0 10px 0",
+    fontSize: "0.9rem",
+  },
+
+  dayDeathRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "1rem",
+    padding: "8px 10px",
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    borderRadius: "8px",
+    marginBottom: "6px",
+    backgroundColor: "rgba(30, 41, 59, 0.45)",
+    color: "#cbd5e1",
+    fontSize: "0.85rem",
+  },
+
+  personalInvestigationStatsBlock: {
+    backgroundColor: "#0f172a",
+    border: "1px solid #334155",
+    borderRadius: "10px",
+    padding: "12px",
+    marginBottom: "1rem",
+  },
+
+  personalInvestigationStatsTitle: {
+    color: "#38bdf8",
+    margin: "0 0 10px 0",
+    fontSize: "0.9rem",
+  },
+
+  personalInvestigationStatsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+    gap: "8px",
+  },
+
+  personalInvestigationStatsCard: {
+    border: "2px solid #94a3b8",
+    borderRadius: "10px",
+    padding: "8px",
+    backgroundColor: "rgba(30, 41, 59, 0.5)",
+  },
+
+  personalInvestigationStatsIdentity: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+
+  personalInvestigationStatsAvatar: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "50%",
+    overflow: "hidden",
+    backgroundColor: "#1e293b",
+    border: "1px solid #334155",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    color: "#f8fafc",
+    fontWeight: 800,
+  },
+
+  personalInvestigationStatsName: {
+    color: "#f8fafc",
+    fontSize: "0.8rem",
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  personalInvestigationStatsRole: {
+    color: "#94a3b8",
+    fontSize: "0.7rem",
+    marginTop: "2px",
+  },
+  personalInvestigationMiniGrid: {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  },
+  personalInvestigationMiniCard: {
+    width: "64px",
+    minHeight: "74px",
+    borderWidth: "2px",
+    borderStyle: "solid",
+    borderColor: "#94a3b8",
+    borderRadius: "10px",
+    backgroundColor: "rgba(30, 41, 59, 0.5)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "5px",
+    padding: "6px",
+  },
+
+  personalInvestigationMiniAvatar: {
+    width: "34px",
+    height: "34px",
+    borderRadius: "50%",
+    overflow: "hidden",
+    backgroundColor: "#1e293b",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#334155",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    color: "#f8fafc",
+    fontWeight: 800,
+    fontSize: "0.8rem",
+  },
+
+  personalInvestigationMiniName: {
+    color: "#cbd5e1",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    textAlign: "center",
+  },
+
+  playerDayExitNotice: {
+    marginTop: "1rem",
+    padding: "12px",
+    borderRadius: "10px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "rgba(239, 68, 68, 0.35)",
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    color: "#fecaca",
+    fontWeight: 800,
+  },
+
+  dayActionList: {
+  backgroundColor: "#0f172a",
+  padding: "12px",
+  borderRadius: "10px",
+  marginBottom: "1rem",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#334155",
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+},
+
+dayActionRow: {
+  display: "grid",
+  gridTemplateColumns: "1.2fr 1fr 90px",
+  alignItems: "center",
+  gap: "12px",
+  padding: "8px",
+  borderRadius: "10px",
+  backgroundColor: "rgba(30, 41, 59, 0.55)",
+},
+
+dayActionLeft: {
+  minWidth: 0,
+},
+
+dayActionCenter: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  minHeight: "36px",
+},
+
+dayActionRight: {
+  textAlign: "right",
+  color: "#f8fafc",
+  fontSize: "0.9rem",
+},
+
+actionMuted: {
+  color: "#94a3b8",
+  fontSize: "0.75rem",
+},
+
+miniPlayer: {
+  display: "flex",
+  alignItems: "center",
+  gap: "9px",
+  minWidth: 0,
+},
+
+miniPlayerCompact: {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  minWidth: 0,
+},
+
+miniAvatar: {
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  overflow: "hidden",
+  backgroundColor: "#1e293b",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#334155",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  color: "#f8fafc",
+  fontWeight: 800,
+},
+
+miniAvatarCompact: {
+  width: "26px",
+  height: "26px",
+  borderRadius: "50%",
+  overflow: "hidden",
+  backgroundColor: "#1e293b",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#334155",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  color: "#f8fafc",
+  fontWeight: 800,
+  fontSize: "0.7rem",
+},
+
+miniPlayerName: {
+  color: "#f8fafc",
+  fontSize: "0.85rem",
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+},
+
+miniPlayerNameCompact: {
+  color: "#f8fafc",
+  fontSize: "0.75rem",
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  maxWidth: "80px",
+},
+
+miniPlayerSub: {
+  color: "#94a3b8",
+  fontSize: "0.68rem",
+  marginTop: "2px",
+},
+
+voteGrid: {
+  display: "grid",
+  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+  gap: "8px",
+  backgroundColor: "#0f172a",
+  padding: "12px",
+  borderRadius: "10px",
+  marginBottom: "0.8rem",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#334155",
+},
+
+voteCard: {
+  backgroundColor: "rgba(30, 41, 59, 0.55)",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "rgba(148, 163, 184, 0.2)",
+  borderRadius: "10px",
+  padding: "8px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "6px",
+  minWidth: 0,
+},
+
+voteArrow: {
+  color: "#ef4444",
+  fontWeight: 900,
+  flexShrink: 0,
+},
+
+voteCountBox: {
+  backgroundColor: "rgba(15, 23, 42, 0.8)",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#334155",
+  borderRadius: "10px",
+  padding: "10px",
+  marginBottom: "1rem",
+},
+
+voteCountTitle: {
+  color: "#94a3b8",
+  fontSize: "0.75rem",
+  fontWeight: 800,
+  marginBottom: "8px",
+  textTransform: "uppercase",
+},
+
+voteCountRow: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "6px 0",
+  borderBottomWidth: "1px",
+  borderBottomStyle: "solid",
+  borderBottomColor: "rgba(148, 163, 184, 0.12)",
+},
+
+voteCountValue: {
+  color: "#f8fafc",
+  backgroundColor: "rgba(239, 68, 68, 0.15)",
+  borderRadius: "999px",
+  padding: "2px 8px",
+},
+
+nightActionBox: {
+  backgroundColor: "#0f172a",
+  padding: "12px",
+  borderRadius: "10px",
+  borderWidth: "1px",
+  borderStyle: "solid",
+  borderColor: "#334155",
+},
+
+nightActionLine: {
+  display: "grid",
+  gridTemplateColumns: "1fr auto 1fr",
+  alignItems: "center",
+  gap: "8px",
+  padding: "8px",
+  borderRadius: "10px",
+  backgroundColor: "rgba(30, 41, 59, 0.5)",
+  marginBottom: "8px",
+},
+
+nightActionText: {
+  color: "#94a3b8",
+  fontSize: "0.8rem",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+},
+
+nightResultText: {
+  marginTop: "8px",
+  color: "#cbd5e1",
+  fontSize: "0.85rem",
+},
+
+nightSuccessText: {
+  color: "#22c55e",
+  fontWeight: 800,
+  marginTop: "8px",
+  fontSize: "0.82rem",
+},
+
+nightEmptyText: {
+  color: "#64748b",
+  fontSize: "0.9rem",
+},
 };
 
 // ==========================================
@@ -1788,7 +2767,39 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#94a3b8",
     textTransform: "uppercase",
     letterSpacing: "0.05em"
-  }
+  },
+    mafiaBadgeStatsBlock: {
+    marginTop: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.55rem",
+  },
+
+  mafiaBadgeStatsRow: {
+    display: "flex",
+    gap: "0.5rem",
+  },
+
+  mafiaBadgeBox: {
+    flex: 1,
+    minHeight: "52px",
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#334155",
+    borderRadius: "10px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "3px",
+  },
+
+  mafiaBadgeLabel: {
+    fontSize: "0.72rem",
+    fontWeight: 900,
+    lineHeight: 1,
+  },
 }
 
 export default function StatsPage() {

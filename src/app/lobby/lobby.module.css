@@ -73,6 +73,7 @@
   margin: 0;
   font-size: 0.875rem;
   color: var(--moon-text-dim);
+  line-height: 1.35;
 }
 
 .lobbyStatus {
@@ -180,4 +181,186 @@
   background: var(--moon-surface);
   border-radius: 12px;
   border: 1px dashed var(--moon-border);
+}
+
+.lobbyCard {
+  gap: 1rem;
+}
+
+.lobbyInfo {
+  min-width: 0;
+}
+
+.lobbyInfo h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobbyStateBox {
+  width: 100%;
+  border: 1px solid var(--moon-border);
+  background: var(--moon-surface-light);
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--moon-text);
+}
+
+.lobbyStateIcon {
+  font-size: 2.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.lobbyStateBox h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+  color: var(--moon-accent);
+}
+
+.lobbyStateBox p {
+  margin: 0;
+  color: var(--moon-text-dim);
+  line-height: 1.4;
+}
+
+.rulesCard {
+  background: var(--moon-surface);
+  border: 1px solid var(--moon-border);
+  border-radius: 16px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rulesItem {
+  border: 1px solid var(--moon-border);
+  border-radius: 12px;
+  background: var(--moon-surface-light);
+  overflow: hidden;
+}
+
+.rulesItem summary {
+  cursor: pointer;
+  padding: 0.75rem 0.85rem;
+  font-weight: 800;
+  color: var(--moon-text);
+  list-style: none;
+}
+
+.rulesItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.rulesItem summary::after {
+  content: "▾";
+  float: right;
+  color: var(--moon-text-dim);
+  transition: transform 0.15s ease;
+}
+
+.rulesItem[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.rulesItem p {
+  margin: 0;
+  padding: 0 0.85rem 0.85rem;
+  color: var(--moon-text-dim);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.modelNotice {
+  margin-top: 0.5rem;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.08);
+  border-radius: 14px;
+  padding: 0.85rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.modelNoticeIcon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.modelNotice b {
+  color: var(--moon-accent);
+  font-size: 0.85rem;
+}
+
+.modelNotice p {
+  margin: 0.25rem 0 0;
+  color: var(--moon-text-dim);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.seatNumberBadge {
+  min-width: 34px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: var(--moon-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.emptySeatCard {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0.75rem;
+  border-style: dashed;
+  opacity: 0.75;
+  background: transparent;
+  color: var(--moon-text-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.emptySeatCard:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: var(--moon-accent);
+}
+
+.emptySeatCard:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.emptySeatPlus {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px dashed var(--moon-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.emptySeatTitle {
+  color: var(--moon-text-dim);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.emptySeatHint {
+  color: var(--moon-accent);
+  font-size: 0.72rem;
+  margin-top: 2px;
 }

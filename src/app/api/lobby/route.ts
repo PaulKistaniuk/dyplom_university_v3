@@ -5,11 +5,16 @@ export async function GET() {
   try {
     const lobbies = await prisma.lobby.findMany({
       where: {
-        status: "waiting",
         isPrivate: false,
+        status: {
+          in: ["waiting", "finished"],
+        },
       },
       include: {
         players: {
+          orderBy: {
+            number: "asc",
+          },
           include: {
             user: {
               select: {
@@ -18,6 +23,22 @@ export async function GET() {
                 avatarUrl: true,
               },
             },
+          },
+        },
+        gameSessions: {
+          take: 1,
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            gameType: true,
+            status: true,
+            state: true,
+            actions: true,
+            settings: true,
+            createdAt: true,
+            updatedAt: true,
           },
         },
       },

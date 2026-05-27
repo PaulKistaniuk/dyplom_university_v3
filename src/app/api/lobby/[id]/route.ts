@@ -15,9 +15,13 @@ export async function GET(
           select: {
             id: true,
             username: true,
+            avatarUrl: true,
           },
         },
         players: {
+          orderBy: {
+            number: "asc",
+          },
           include: {
             user: {
               select: {
@@ -30,9 +34,20 @@ export async function GET(
         },
         gameSessions: {
           take: 1,
-          orderBy: { createdAt: "desc" },
-          select: { id: true }
-        }
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            gameType: true,
+            status: true,
+            state: true,
+            actions: true,
+            settings: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     })
 

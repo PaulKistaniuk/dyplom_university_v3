@@ -141,6 +141,32 @@ export default function LobbyPage() {
     setLobby(data.lobby)
   }
 
+  const selectSeat = async (seatNumber: number) => {
+    if (lobby?.status !== "waiting") return
+
+    const res = await fetch("/api/lobby/seat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        lobbyId: id,
+        number: seatNumber,
+      }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      alert(data.error || "Не вдалося зайняти місце")
+      return
+    }
+
+    const updated = await fetch(`/api/lobby/${id}`).then(r => r.json())
+    setLobby(updated.lobby)
+  }
+
   const leaveLobby = async () => {
     const res = await fetch("/api/lobby/leave", {
       method: "POST",
@@ -167,66 +193,306 @@ export default function LobbyPage() {
     setLobby(updated.lobby)
   }
 
+  const getLatestSession = () => {
+    return lobby?.gameSessions?.[0] || null
+  }
+
+  const getLobbyResultText = () => {
+    if (!lobby || lobby.status !== "finished") return null
+
+    const lastSession = getLatestSession()
+    const state = lastSession?.state || {}
+    const actions = lastSession?.actions || {}
+    const settings = lastSession?.settings || actions.settings || state.settings || {}
+
+    if (lobby.gameType === "mafia") {
+      const winnerTeam = String(state.winnerTeam || actions.winnerTeam || "").toLowerCase()
+
+      if (winnerTeam.includes("маф")) {
+        return "Результат: перемогла команда Мафії"
+      }
+
+      if (winnerTeam.includes("мир") || winnerTeam.includes("citizen")) {
+        return "Результат: перемогло мирне місто"
+      }
+
+      return "Результат: гру завершено"
+    }
+
+    if (lobby.gameType === "whoami") {
+      const winners = actions.winners || state.winners || []
+      const winnerId = Array.isArray(winners) ? winners[0] : null
+
+      const winnerPlayer = lobby.players?.find((p: any) => p.userId === winnerId)
+      const winnerName = winnerPlayer?.user?.username || "невідомо"
+
+      if (winnerId) {
+        if (settings.gameMode === "loser") {
+          return `Результат: абсолютний переможець ${winnerName}`
+        }
+
+        return `Результат: переможець ${winnerName}`
+      }
+
+      return "Результат: гру завершено"
+    }
+
+    return "Результат: гру завершено"
+  }
+
+  const getActiveGameHref = () => {
+    const lastSession = getLatestSession()
+    if (!lastSession?.id) return null
+
+    if (lobby?.gameType === "whoami") {
+      return `/game/whoami/${lastSession.id}`
+    }
+
+    return `/game/${lastSession.id}`
+  }
+
+  const getPlayerBySeat = (seatNumber: number) => {
+    return lobby.players.find((p: any) => p.number === seatNumber)
+  }
+
+  const currentPlayer = lobby.players.find((p: any) => p.userId === user?.id)
+
+  const renderGameRules = () => {
+    if (lobby.gameType === "mafia") {
+      return (
+        <>
+          <details className={styles.rulesItem} open>
+            <summary>🎭 Суть гри</summary>
+            <p>
+              Гравці отримують приховані ролі та діляться на дві команди: мирне місто і мафію.
+              Мирні мають знайти мафію, а мафія — прибрати достатню кількість мирних гравців.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>🌙 Ніч</summary>
+            <p>
+              Уночі мафія обирає ціль для вбивства. Дон може перевірити гравця на роль комісара,
+              комісар перевіряє гравця на належність до мафії, а лікар може врятувати одного гравця.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>☀️ День</summary>
+            <p>
+              Удень гравці по черзі говорять, обговорюють підозри та можуть виставляти інших
+              гравців на голосування. Після завершення обговорення відбувається голосування.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>🗳️ Голосування</summary>
+            <p>
+              Якщо гравця виставлено на голосування, учасники можуть проголосувати проти одного
+              з кандидатів. Гравець, який набрав найбільше голосів, залишає гру.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>🏆 Перемога</summary>
+            <p>
+              Мирне місто перемагає, якщо всі представники мафії вибувають з гри. Мафія перемагає,
+              якщо її кількість стає достатньою для контролю голосування.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>📊 Оцінювання</summary>
+            <p>
+              Після завершення гри система формує персональну оцінку гравців, значки та пояснення
+              за діями під час гри: промовами, голосуваннями, перевірками, номінаціями та іншими подіями.
+            </p>
+          </details>
+        </>
+      )
+    }
+
+    if (lobby.gameType === "whoami") {
+      return (
+        <>
+          <details className={styles.rulesItem} open>
+            <summary>🎯 Суть гри</summary>
+            <p>
+              Кожен гравець отримує слово або персонажа, якого він не бачить. Завдання — ставити
+              питання іншим гравцям і першим здогадатися, ким або чим він є.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>✍️ Підготовка</summary>
+            <p>
+              Слова можуть задавати самі гравці або інше джерело залежно від налаштувань лобі.
+              Після розподілу кожен бачить слова інших, але не бачить власне.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>❓ Хід гри</summary>
+            <p>
+              Гравці ходять по черзі. У свій хід гравець ставить питання, на яке інші відповідають
+              “так”, “ні” або “можливо”. Після цього гравець може спробувати вгадати своє слово.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>🏆 До чемпіона</summary>
+            <p>
+              У режимі “до чемпіона” перемагає гравець, який першим правильно вгадав своє слово.
+              Інші гравці можуть продовжити гру для визначення наступних місць.
+            </p>
+          </details>
+
+          <details className={styles.rulesItem}>
+            <summary>💀 До лузера</summary>
+            <p>
+              У режимі “до лузера” гра триває, доки не залишиться останній гравець, який не вгадав
+              своє слово. Переможцями вважаються ті, хто впорався раніше.
+            </p>
+          </details>
+        </>
+      )
+    }
+
+    return (
+      <details className={styles.rulesItem} open>
+        <summary>📘 Правила</summary>
+        <p>Правила для цього режиму гри ще не додані.</p>
+      </details>
+    )
+  }
+
+  const latestSession = getLatestSession()
+  const activeGameHref = getActiveGameHref()
+  const isWaitingLobby = lobby?.status === "waiting"
+  const isPlayingLobby = lobby?.status === "playing"
+  const isFinishedLobby = lobby?.status === "finished"
+  const finishedResultText = getLobbyResultText()
+
   return (
     <div className={styles.container}>
-      <div className={styles.mainGrid} style={{ gridTemplateColumns: "1fr 350px" }}>
+      <div className={styles.mainGrid} style={{ gridTemplateColumns: "280px 1fr 350px" }}>
+
+        {/* Center: Rules */}
+        <div className={styles.sidebar}>
+          <div className={styles.sectionTitle}>Правила</div>
+
+          <div className={styles.rulesCard}>
+            {renderGameRules()}
+
+            {lobby.gameType === "mafia" && (
+              <div className={styles.modelNotice}>
+                <div className={styles.modelNoticeIcon}>🤖</div>
+                <div>
+                  <b>Навчання моделі</b>
+                  <p>Ваші ігри будуть використовуватись для навчання моделі оцінювання.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         
-        {/* Left: Players and Info */}
+        {/* Right: Players and Info */}
         <div className={styles.content}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h1 className={styles.sectionTitle} style={{ margin: 0 }}>{lobby.name}</h1>
             <div className={styles.badge + " " + (
-              lobby.status === "waiting" ? styles.badgeWaiting : styles.badgePlaying
+              lobby.status === "waiting"
+                ? styles.badgeWaiting
+                : lobby.status === "playing"
+                  ? styles.badgePlaying
+                  : styles.badgeFinished
             )}>
-              {lobby.status === "waiting" ? "Очікування" : "У грі"}
+              {lobby.status === "waiting"
+                ? "Очікування"
+                : lobby.status === "playing"
+                  ? "Гра триває"
+                  : "Завершено"}
             </div>
           </div>
 
           <div className={styles.card}>
             <div className={styles.filterLabel} style={{ marginBottom: "1rem" }}>Гравці ({lobby.players.length} / {lobby.maxPlayers})</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "1rem" }}>
-              {lobby.players.map((p: any) => (
-                <div key={p.id} className={styles.card} style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "12px", 
-                  padding: "0.75rem",
-                  backgroundColor: p.isReady ? "rgba(34, 197, 94, 0.05)" : "var(--moon-surface-light)",
-                  borderColor: p.isReady ? "#22c55e" : "var(--moon-border)"
-                }}>
-                  <img
-                    src={p.user.avatarUrl || "/default-avatar.png"}
-                    width={40}
-                    height={40}
-                    style={{ borderRadius: "50%", objectFit: "cover", border: "2px solid var(--moon-border)" }}
-                    alt="avatar"
-                  />
-                  <div style={{ flex: 1, overflow: "hidden" }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {p.user.username}
-                      {p.user.id === lobby.ownerId && " 👑"}
+              {Array.from({ length: lobby.maxPlayers }).map((_, index) => {
+                const seatNumber = index + 1
+                const player = getPlayerBySeat(seatNumber)
+                const isCurrentUserSeat = player?.userId === user?.id
+                const canSelectSeat = lobby.status === "waiting" && !player
+
+                if (player) {
+                  return (
+                    <div
+                      key={`seat-${seatNumber}`}
+                      className={styles.card}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "0.75rem",
+                        backgroundColor: player.isReady ? "rgba(34, 197, 94, 0.05)" : "var(--moon-surface-light)",
+                        borderColor: isCurrentUserSeat
+                          ? "var(--moon-accent)"
+                          : player.isReady
+                            ? "#22c55e"
+                            : "var(--moon-border)",
+                        boxShadow: isCurrentUserSeat ? "0 0 0 1px var(--moon-accent)" : "none",
+                      }}
+                    >
+                      <div className={styles.seatNumberBadge}>№{seatNumber}</div>
+
+                      <img
+                        src={player.user.avatarUrl || "/default-avatar.png"}
+                        width={40}
+                        height={40}
+                        style={{ borderRadius: "50%", objectFit: "cover", border: "2px solid var(--moon-border)" }}
+                        alt="avatar"
+                      />
+
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div style={{ fontWeight: 600, fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {player.user.username}
+                          {player.user.id === lobby.ownerId && " 👑"}
+                          {isCurrentUserSeat}
+                        </div>
+
+                        <div style={{ fontSize: "0.75rem", color: player.isReady ? "#22c55e" : "var(--moon-text-dim)" }}>
+                          {player.isReady ? "Готовий" : "Очікує"}
+                        </div>
+                      </div>
+
+                      {player.isReady && <div style={{ color: "#22c55e", fontWeight: "bold" }}>✓</div>}
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: p.isReady ? "#22c55e" : "var(--moon-text-dim)" }}>
-                      {p.isReady ? "Готовий" : "Очікує"}
+                  )
+                }
+
+                return (
+                  <button
+                    key={`seat-${seatNumber}`}
+                    type="button"
+                    className={`${styles.card} ${styles.emptySeatCard}`}
+                    disabled={!canSelectSeat}
+                    onClick={() => selectSeat(seatNumber)}
+                  >
+                    <div className={styles.seatNumberBadge}>№{seatNumber}</div>
+
+                    <div className={styles.emptySeatPlus}>+</div>
+
+                    <div>
+                      <div className={styles.emptySeatTitle}>Вільне місце</div>
+                      {lobby.status === "waiting" && (
+                        <div className={styles.emptySeatHint}>
+                          {currentPlayer ? "Змінити місце" : "Зайняти місце"}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  {p.isReady && <div style={{ color: "#22c55e", fontWeight: "bold" }}>✓</div>}
-                </div>
-              ))}
-              {Array.from({ length: Math.max(0, lobby.maxPlayers - lobby.players.length) }).map((_, i) => (
-                <div key={`empty-${i}`} className={styles.card} style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "12px", 
-                  padding: "0.75rem",
-                  borderStyle: "dashed",
-                  opacity: 0.5,
-                  backgroundColor: "transparent"
-                }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", border: "2px dashed var(--moon-border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>+</div>
-                  <div style={{ color: "var(--moon-text-dim)", fontSize: "0.85rem" }}>Вільне місце</div>
-                </div>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -251,54 +517,65 @@ export default function LobbyPage() {
             <hr style={{ border: "none", borderTop: "1px solid var(--moon-border)", margin: "0.5rem 0" }} />
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {isInLobby && lobby.status === "waiting" && (
-                <button 
-                  className={styles.button + " " + (lobby.players.find((p:any) => p.userId === user?.id)?.isReady ? styles.buttonSecondary : "")}
-                  onClick={toggleReady}
-                >
-                  {lobby.players.find((p:any) => p.userId === user?.id)?.isReady ? "Не готовий" : "Я готовий!"}
-                </button>
+              {isWaitingLobby && (
+                <>
+                  {isInLobby && (
+                    <button
+                      className={styles.button + " " + (lobby.players.find((p: any) => p.userId === user?.id)?.isReady ? styles.buttonSecondary : "")}
+                      onClick={toggleReady}
+                    >
+                      {lobby.players.find((p: any) => p.userId === user?.id)?.isReady ? "Не готовий" : "Я готовий!"}
+                    </button>
+                  )}
+
+                  {isOwner && (
+                    <button
+                      className={styles.button}
+                      disabled={!allReady}
+                      style={{ opacity: allReady ? 1 : 0.5, cursor: allReady ? "pointer" : "not-allowed" }}
+                      onClick={startGame}
+                    >
+                      Почати гру
+                    </button>
+                  )}
+
+                  {!isInLobby ? (
+                    <button className={styles.button} onClick={joinLobby}>
+                      Приєднатися
+                    </button>
+                  ) : (
+                    <button
+                      className={styles.button + " " + styles.buttonSecondary}
+                      onClick={() => {
+                        if (isOwner) {
+                          const confirmDelete = confirm("Видалити лобі?")
+                          if (!confirmDelete) return
+                        }
+                        leaveLobby()
+                      }}
+                    >
+                      {isOwner ? "Видалити лобі" : "Вийти"}
+                    </button>
+                  )}
+                </>
               )}
 
-              {isOwner && lobby.status === "waiting" && (
-                <button 
-                  className={styles.button} 
-                  disabled={!allReady}
-                  style={{ opacity: allReady ? 1 : 0.5, cursor: allReady ? "pointer" : "not-allowed" }}
-                  onClick={startGame}
-                >
-                  Почати гру
-                </button>
-              )}
-
-              {!isInLobby && lobby.status === "waiting" ? (
-                <button className={styles.button} onClick={joinLobby}>
-                  Приєднатися
-                </button>
-              ) : (
-                isInLobby && (
-                  <button
-                    className={styles.button + " " + styles.buttonSecondary}
-                    onClick={() => {
-                      if (isOwner) {
-                        const confirmDelete = confirm("Видалити лобі?")
-                        if (!confirmDelete) return
-                      }
-                      leaveLobby()
-                    }}
-                  >
-                    {isOwner ? "Видалити лобі" : "Вийти"}
-                  </button>
-                )
+              {isFinishedLobby && (
+                <div className={styles.lobbyStateBox}>
+                  <div className={styles.lobbyStateIcon}>🏁</div>
+                  <h3>Гра завершена</h3>
+                  <p>{finishedResultText}</p>
+                </div>
               )}
             </div>
             
-            {!allReady && isOwner && lobby.players.length < minPlayers && (
+            {isWaitingLobby && !allReady && isOwner && lobby.players.length < minPlayers && (
               <div style={{ fontSize: "0.75rem", color: "#f87171", textAlign: "center" }}>
                 Потрібно мінімум {minPlayers} гравці
               </div>
             )}
-            {!allReady && isOwner && lobby.players.length >= minPlayers && (
+
+            {isWaitingLobby && !allReady && isOwner && lobby.players.length >= minPlayers && (
               <div style={{ fontSize: "0.75rem", color: "var(--moon-text-dim)", textAlign: "center" }}>
                 Очікуємо готовності всіх гравців
               </div>

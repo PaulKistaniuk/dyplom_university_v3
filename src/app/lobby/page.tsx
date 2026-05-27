@@ -10,11 +10,79 @@ export default function LobbyListPage() {
   const [showCreateDropdown, setShowCreateDropdown] = useState(false)
   const [filters, setFilters] = useState({
     gameType: "all",
-    status: "waiting",
+    status: "all",
     players: "all"
   })
 
   const router = useRouter()
+
+  const getLobbyGameName = (gameType: string) => {
+    if (gameType === "mafia") return "Мафія"
+    if (gameType === "whoami") return "Хто я?"
+    if (gameType === "bunker") return "Бункер"
+    return gameType
+  }
+
+  const getLobbyStatusLabel = (status: string) => {
+    if (status === "waiting") return "Очікування"
+    if (status === "finished") return "Завершено"
+    return status
+  }
+
+  const getLobbyStatusClass = (status: string) => {
+    if (status === "waiting") return styles.badgeWaiting
+    if (status === "finished") return styles.badgeFinished
+    return styles.badgeWaiting
+  }
+
+  const getLobbyResultText = (lobby: any) => {
+    if (lobby.status !== "finished") return null
+
+    const lastSession = lobby.gameSessions?.[0]
+    const state = lastSession?.state || {}
+    const actions = lastSession?.actions || {}
+    const settings = lastSession?.settings || actions.settings || state.settings || {}
+
+    if (lobby.gameType === "mafia") {
+      const winnerTeam = String(state.winnerTeam || actions.winnerTeam || "").toLowerCase()
+
+      if (winnerTeam.includes("маф")) {
+        return "Результат: Перемогла команда Мафії"
+      }
+
+      if (winnerTeam.includes("мир") || winnerTeam.includes("citizen")) {
+        return "Результат: Перемогло мирне місто"
+      }
+
+      return "Результат: Гру завершено"
+    }
+
+    if (lobby.gameType === "whoami") {
+      const winners = actions.winners || state.winners || []
+      const winnerId = Array.isArray(winners) ? winners[0] : null
+
+      const winnerPlayer = lobby.players?.find((p: any) => p.userId === winnerId)
+      const winnerName = winnerPlayer?.user?.username || "невідомо"
+
+      if (winnerId) {
+        if (settings.gameMode === "loser") {
+          return `Результат: Абсолютний переможець ${winnerName}`
+        }
+
+        return `Результат: Переможець ${winnerName}`
+      }
+
+      return "Результат: Гру завершено"
+    }
+
+    return "Результат: Гру завершено"
+  }
+
+  const getStatusOrder = (status: string) => {
+    if (status === "waiting") return 1
+    if (status === "finished") return 2
+    return 3
+  }
 
   useEffect(() => {
     const fetchLobbies = () => {
@@ -32,20 +100,34 @@ export default function LobbyListPage() {
   }, [])
 
   useEffect(() => {
-    let result = allLobbies
+    let result = [...allLobbies]
+
+    result = result.filter(lobby => lobby.status !== "playing")
 
     if (filters.gameType !== "all") {
-      result = result.filter(l => l.gameType === filters.gameType)
+      result = result.filter(lobby => lobby.gameType === filters.gameType)
     }
 
     if (filters.status !== "all") {
-      result = result.filter(l => l.status === filters.status)
+      result = result.filter(lobby => lobby.status === filters.status)
     }
 
     if (filters.players !== "all") {
       const [min, max] = filters.players.split("-").map(Number)
-      result = result.filter(l => l.players.length >= min && (max ? l.players.length <= max : true))
+
+      result = result.filter(lobby => {
+        const playersCount = lobby.players?.length || 0
+        return playersCount >= min && playersCount <= max
+      })
     }
+
+    result.sort((a, b) => {
+      const statusDiff = getStatusOrder(a.status) - getStatusOrder(b.status)
+
+      if (statusDiff !== 0) return statusDiff
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
 
     setFilteredLobbies(result)
   }, [allLobbies, filters])
@@ -104,18 +186,26 @@ export default function LobbyListPage() {
               >
                 <div className={styles.lobbyInfo}>
                   <h3>{lobby.name || `Лобі #${lobby.id.slice(0, 4)}`}</h3>
-                  <p>Гра: {lobby.gameType === "mafia" ? "Мафія" : lobby.gameType === "whoami" ? "Хто я?" : lobby.gameType}</p>
+
+                  <p>Гра: {getLobbyGameName(lobby.gameType)}</p>
+
+                  {lobby.status === "finished" && (
+                    <p style={{ color: "#94a3b8", marginTop: "0.35rem" }}>
+                      {getLobbyResultText(lobby)}
+                    </p>
+                  )}
                 </div>
+
                 <div className={styles.lobbyStatus}>
-                  <div className={styles.badge + " " + (
-                    lobby.status === "waiting" ? styles.badgeWaiting :
-                      lobby.status === "playing" ? styles.badgePlaying : styles.badgeFinished
-                  )}>
-                    {lobby.status === "waiting" ? "Очікування" :
-                      lobby.status === "playing" ? "Грають" : "Завершено"}
+                  <div className={`${styles.badge} ${getLobbyStatusClass(lobby.status)}`}>
+                    {getLobbyStatusLabel(lobby.status)}
                   </div>
+
                   <p style={{ margin: 0, fontSize: "0.875rem" }}>
-                    Гравців: <span style={{ color: "var(--moon-text)" }}>{lobby.players.length} / {lobby.maxPlayers || 10}</span>
+                    Гравців:{" "}
+                    <span style={{ color: "var(--moon-text)" }}>
+                      {lobby.players?.length || 0} / {lobby.maxPlayers || 10}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -150,7 +240,6 @@ export default function LobbyListPage() {
                 >
                   <option value="all">Всі</option>
                   <option value="waiting">Очікування</option>
-                  <option value="playing">В грі</option>
                   <option value="finished">Завершено</option>
                 </select>
               </div>
@@ -163,16 +252,16 @@ export default function LobbyListPage() {
                   onChange={(e) => setFilters({ ...filters, players: e.target.value })}
                 >
                   <option value="all">Будь-яка к-сть</option>
-                  <option value="0-5">1-5 гравців</option>
+                  <option value="2-5">2-5 гравців</option>
                   <option value="6-10">6-10 гравців</option>
-                  <option value="11-15">11+ гравців</option>
+                  <option value="11-999">11+ гравців</option>
                 </select>
               </div>
 
               <button
                 className={styles.button + " " + styles.buttonSecondary}
                 style={{ marginTop: "0.5rem" }}
-                onClick={() => setFilters({ gameType: "all", status: "waiting", players: "all" })}
+                onClick={() => setFilters({ gameType: "all", status: "all", players: "all" })}
               >
                 Скинути
               </button>
